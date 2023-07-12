@@ -1,1 +1,2 @@
 backtesting==0.3.3
+black==23.7.0
