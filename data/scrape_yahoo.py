@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import requests
 import pandas as pd
+from typing import List
 
 
 class YahooFinanceHistory:
@@ -49,9 +50,26 @@ class YahooFinanceHistory:
 
 
 if __name__ == "__main__":
-    symbol = "AAPL"
+    sector = "consumer_defensive"
+    sector_dir: Path = Path(f"data/{sector}")
+    symbols_path: Path = Path(sector_dir, f"{sector}_symbols.txt")
+
+    # Get symbols for sector
+    symbols: List[str] = []
+    with open(symbols_path, "r") as symbols_file:
+        for line in symbols_file:
+            # Escape comments
+            if line.startswith("#"):
+                continue
+            symbols.append(line.strip())
+
+    # Scrape data
+    print(f"Scraping data for {len(symbols)} symbols")
     days_back = 365 * 10  # 10 years
-    df = YahooFinanceHistory(symbol, days_back=days_back).get_quote()
-    out_filepath = Path(f"data/{symbol}.csv")
-    out_filepath.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out_filepath, index=False)
+    for symbol in symbols:
+        print(f"Scraping data for {symbol}")
+        df = YahooFinanceHistory(symbol, days_back=days_back).get_quote()
+        out_filepath = Path(sector_dir, f"{symbol}.csv")
+        out_filepath.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(out_filepath, index=False)
+        print(f"Saved data to {out_filepath}")
