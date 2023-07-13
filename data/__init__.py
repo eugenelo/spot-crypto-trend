@@ -18,3 +18,6 @@ GM = _read_file("GM.csv")
 
 FORD = _read_file("F.csv")
 """DataFrame of daily NASDAQ:F (Ford) stock price data from 1972 to 2023."""
+
+AAPL = _read_file("AAPL.csv")
+"""DataFrame of daily NASDAQ:AAPL (Apple) stock price data from 2013 to 2023."""
