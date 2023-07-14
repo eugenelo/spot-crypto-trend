@@ -2,7 +2,7 @@ from backtesting import Backtest, Strategy
 from backtesting.lib import crossover
 
 from backtesting.test import SMA, GOOG
-from data import GM, FORD, AAPL
+from data import GM, FORD, AAPL, symbol_to_df
 
 
 class SmaCross(Strategy):
@@ -19,7 +19,13 @@ class SmaCross(Strategy):
 
 
 if __name__ == "__main__":
-    bt = Backtest(AAPL, SmaCross, commission=0.002, exclusive_orders=True)
+    sector = "consumer_defensive"
+    bt = Backtest(
+        symbol_to_df(symbol="K", sector=sector),
+        SmaCross,
+        commission=0.002,
+        exclusive_orders=True,
+    )
     stats = bt.run()
     print(stats)
     bt.plot()
