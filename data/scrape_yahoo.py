@@ -6,6 +6,7 @@ from pathlib import Path
 import requests
 import pandas as pd
 from typing import List
+import time
 
 
 class YahooFinanceHistory:
@@ -73,3 +74,6 @@ if __name__ == "__main__":
         out_filepath.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(out_filepath, index=False)
         print(f"Saved data to {out_filepath}")
+
+        # Rate limit
+        time.sleep(5)
