@@ -14,22 +14,29 @@ def parse_args():
         "--timeframe", "-t", type=str, default="1H", help="1Min / 1H / 1D / etc."
     )
     parser.add_argument(
-        "--since",
+        "--start",
         "-s",
         type=str,
-        help="Starting UTC date before which to filter out data.",
+        help="Starting UTC date before which to filter out data (inclusive).",
+    )
+    parser.add_argument(
+        "--end",
+        "-e",
+        type=str,
+        help="Ending UTC date after which to filter out data (inclusive).",
     )
     return parser.parse_args()
 
 
-def tick_to_ohlc(input: Path, timeframe: str, since: Optional[str]):
+def tick_to_ohlc(input: Path, timeframe: str, start: Optional[str], end: Optional[str]):
     """
     Convert tick data to OHLC data.
 
     Parameters:
         tick_data (list of tuples): List of tuples containing (timestamp, price, volume).
         timeframe (str): Timeframe for OHLC data (e.g., '1Min', '1H', '1D').
-        since (Optional[str]): Starting UTC date before which to filter out data.
+        start (Optional[str]): Starting UTC date before which to filter out data.
+        end (Optional[str]): Ending UTC date after which to filter out data.
 
     Returns:
         pandas DataFrame: DataFrame containing OHLC data.
@@ -41,9 +48,12 @@ def tick_to_ohlc(input: Path, timeframe: str, since: Optional[str]):
     # Convert timestamp to datetime
     df["Timestamp"] = pd.to_datetime(df["Timestamp"], unit="s")
 
-    if since is not None:
-        # Filter on since
-        df = df[df["Timestamp"] > pd.to_datetime(since)]
+    if start is not None:
+        # Filter on start
+        df = df[df["Timestamp"] >= pd.to_datetime(start)]
+    if end is not None:
+        # Filter on start
+        df = df[df["Timestamp"] <= pd.to_datetime(end)]
 
     # Resample data to desired timeframe and calculate OHLC
     ohlc_data = (
@@ -63,7 +73,9 @@ if __name__ == "__main__":
     if not input_path.exists():
         raise OSError("Input path not found")
 
-    ohlc = tick_to_ohlc(input_path, timeframe=args.timeframe, since=args.since)
+    ohlc = tick_to_ohlc(
+        input_path, timeframe=args.timeframe, start=args.start, end=args.end
+    )
     ticker = input_path.stem
     # Hack to fix ticker names
     if ticker == "XXBTZUSD":
