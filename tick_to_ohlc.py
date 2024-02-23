@@ -44,7 +44,6 @@ def tick_to_ohlc(input: Path, timeframe: str, start: Optional[str], end: Optiona
         pandas DataFrame: DataFrame containing OHLC data.
     """
     # Convert tick data to DataFrame
-    # with input.open() as fin:
     df = pl.read_csv(
         input, has_header=False, new_columns=["timestamp", "price", "volume"]
     )
@@ -61,6 +60,7 @@ def tick_to_ohlc(input: Path, timeframe: str, start: Optional[str], end: Optiona
         # Filter on start
         df = df.filter(pl.col("timestamp") <= pd.to_datetime(end))
 
+    print("Input dataframe:")
     print(df)
 
     # Group by the resampled timeframe and calculate OHLC
@@ -73,12 +73,6 @@ def tick_to_ohlc(input: Path, timeframe: str, start: Optional[str], end: Optiona
             pl.col("volume").sum().alias("volume"),
         ]
     )
-
-    # ohlc_data = (
-    #     df.set_index("Timestamp")
-    #     .resample(timeframe)
-    #     .agg({"price": "ohlc", "volume": "sum"})
-    # )
 
     return ohlc_data
 
@@ -96,9 +90,9 @@ if __name__ == "__main__":
     )
     ticker = input_path.stem
     # Hack to fix ticker names
-    if ticker == "XXBTZUSD":
+    if ticker == "XBTUSD":
         ticker = "BTC/USD"
-    elif ticker == "XETHZUSD":
+    elif ticker == "ETHUSD":
         ticker = "ETH/USD"
     elif ticker == "MATICUSD":
         ticker = "MATIC/USD"
