@@ -1,7 +1,9 @@
 import argparse
+import polars as pl
 import pandas as pd
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 
 
 def parse_args():
@@ -33,7 +35,7 @@ def tick_to_ohlc(input: Path, timeframe: str, start: Optional[str], end: Optiona
     Convert tick data to OHLC data.
 
     Parameters:
-        tick_data (list of tuples): List of tuples containing (timestamp, price, volume).
+        input (pathlib.Path): Filepath to input csv.
         timeframe (str): Timeframe for OHLC data (e.g., '1Min', '1H', '1D').
         start (Optional[str]): Starting UTC date before which to filter out data.
         end (Optional[str]): Ending UTC date after which to filter out data.
@@ -42,25 +44,41 @@ def tick_to_ohlc(input: Path, timeframe: str, start: Optional[str], end: Optiona
         pandas DataFrame: DataFrame containing OHLC data.
     """
     # Convert tick data to DataFrame
-    with input.open() as fin:
-        df = pd.read_csv(fin, header=None, names=["Timestamp", "Price", "Volume"])
+    # with input.open() as fin:
+    df = pl.read_csv(
+        input, has_header=False, new_columns=["timestamp", "price", "volume"]
+    )
 
-    # Convert timestamp to datetime
-    df["Timestamp"] = pd.to_datetime(df["Timestamp"], unit="s")
+    # Convert timestamp column to datetime
+    df = df.with_columns(
+        pl.col("timestamp").apply(lambda x: datetime.utcfromtimestamp(x))
+    ).sort("timestamp")
 
     if start is not None:
         # Filter on start
-        df = df[df["Timestamp"] >= pd.to_datetime(start)]
+        df = df.filter(pl.col("timestamp") >= pd.to_datetime(start))
     if end is not None:
         # Filter on start
-        df = df[df["Timestamp"] <= pd.to_datetime(end)]
+        df = df.filter(pl.col("timestamp") <= pd.to_datetime(end))
 
-    # Resample data to desired timeframe and calculate OHLC
-    ohlc_data = (
-        df.set_index("Timestamp")
-        .resample(timeframe)
-        .agg({"Price": "ohlc", "Volume": "sum"})
+    print(df)
+
+    # Group by the resampled timeframe and calculate OHLC
+    ohlc_data = df.group_by_dynamic("timestamp", every="1h").agg(
+        [
+            pl.col("price").first().alias("open"),
+            pl.col("price").max().alias("high"),
+            pl.col("price").min().alias("low"),
+            pl.col("price").last().alias("close"),
+            pl.col("volume").sum().alias("volume"),
+        ]
     )
+
+    # ohlc_data = (
+    #     df.set_index("Timestamp")
+    #     .resample(timeframe)
+    #     .agg({"price": "ohlc", "volume": "sum"})
+    # )
 
     return ohlc_data
 
@@ -84,7 +102,7 @@ if __name__ == "__main__":
         ticker = "ETH/USD"
     elif ticker == "MATICUSD":
         ticker = "MATIC/USD"
-    ohlc["ticker"] = ticker
+    ohlc = ohlc.with_columns(pl.lit(ticker).alias("ticker"))
 
     if args.output is None:
         # Print data
@@ -93,7 +111,7 @@ if __name__ == "__main__":
         # Output file
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        ohlc.to_csv(str(output_path))
+        ohlc.write_csv(output_path)
         print(
             f"Converted {input_path} into {args.timeframe} OHLC data at {output_path}"
         )

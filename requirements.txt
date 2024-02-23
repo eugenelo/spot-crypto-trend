@@ -1,3 +1,4 @@
 backtesting==0.3.3
 black==23.7.0
 requests==2.31.0
+polars==0.20.10
