@@ -1,6 +1,7 @@
 import argparse
 import pandas as pd
 from pathlib import Path
+from typing import Optional
 
 
 def parse_args():
@@ -8,22 +9,27 @@ def parse_args():
     parser.add_argument(
         "--input", "-i", type=str, required=True, help="Input file path"
     )
-    parser.add_argument(
-        "--output", "-o", type=str, required=True, help="Output file path"
-    )
+    parser.add_argument("--output", "-o", type=str, help="Output file path")
     parser.add_argument(
         "--timeframe", "-t", type=str, default="1H", help="1Min / 1H / 1D / etc."
+    )
+    parser.add_argument(
+        "--since",
+        "-s",
+        type=str,
+        help="Starting UTC date before which to filter out data.",
     )
     return parser.parse_args()
 
 
-def tick_to_ohlc(input: Path, timeframe: str):
+def tick_to_ohlc(input: Path, timeframe: str, since: Optional[str]):
     """
     Convert tick data to OHLC data.
 
     Parameters:
         tick_data (list of tuples): List of tuples containing (timestamp, price, volume).
         timeframe (str): Timeframe for OHLC data (e.g., '1Min', '1H', '1D').
+        since (Optional[str]): Starting UTC date before which to filter out data.
 
     Returns:
         pandas DataFrame: DataFrame containing OHLC data.
@@ -34,6 +40,10 @@ def tick_to_ohlc(input: Path, timeframe: str):
 
     # Convert timestamp to datetime
     df["Timestamp"] = pd.to_datetime(df["Timestamp"], unit="s")
+
+    if since is not None:
+        # Filter on since
+        df = df[df["Timestamp"] > pd.to_datetime(since)]
 
     # Resample data to desired timeframe and calculate OHLC
     ohlc_data = (
@@ -53,7 +63,7 @@ if __name__ == "__main__":
     if not input_path.exists():
         raise OSError("Input path not found")
 
-    ohlc = tick_to_ohlc(input_path, timeframe=args.timeframe)
+    ohlc = tick_to_ohlc(input_path, timeframe=args.timeframe, since=args.since)
     ticker = input_path.stem
     # Hack to fix ticker names
     if ticker == "XXBTZUSD":
@@ -64,9 +74,14 @@ if __name__ == "__main__":
         ticker = "MATIC/USD"
     ohlc["ticker"] = ticker
 
-    # Output file
-    output_path = Path(args.output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    ohlc.to_csv(str(output_path))
-
-    print(f"Converted {input_path} into {args.timeframe} OHLC data at {output_path}")
+    if args.output is None:
+        # Print data
+        print(ohlc)
+    else:
+        # Output file
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        ohlc.to_csv(str(output_path))
+        print(
+            f"Converted {input_path} into {args.timeframe} OHLC data at {output_path}"
+        )
