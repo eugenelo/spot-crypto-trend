@@ -3,7 +3,7 @@ import polars as pl
 import pandas as pd
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
+import datetime
 import glob
 
 
@@ -50,10 +50,13 @@ def tick_to_ohlc(
     df = pl.read_csv(
         input_path, has_header=False, new_columns=["timestamp", "price", "volume"]
     )
+    df = df.with_columns(dollar_volume=pl.col("price") * pl.col("volume"))
 
     # Convert timestamp column to datetime
     df = df.with_columns(
-        pl.col("timestamp").map_elements(lambda x: datetime.utcfromtimestamp(x))
+        pl.col("timestamp").map_elements(
+            lambda x: datetime.datetime.utcfromtimestamp(x)
+        )
     ).sort("timestamp")
 
     if start is not None:
@@ -73,8 +76,10 @@ def tick_to_ohlc(
             pl.col("price").min().alias("low"),
             pl.col("price").last().alias("close"),
             pl.col("volume").sum().alias("volume"),
+            pl.col("dollar_volume").sum().alias("dollar_volume"),
         ]
     )
+    # TODO(@eugene.lo): Add vwap
 
     return ohlc_data
 

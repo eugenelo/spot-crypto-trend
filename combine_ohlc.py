@@ -30,7 +30,17 @@ def main(
         output_path (Optional[pathlib.Path]): Filepath to output csv.
     """
     ohlc_final = pd.DataFrame(
-        columns=["timestamp", "open", "high", "low", "close", "volume", "ticker"]
+        columns=[
+            "timestamp",
+            "open",
+            "high",
+            "low",
+            "close",
+            "vwap",
+            "volume",
+            "dollar_volume",
+            "ticker",
+        ]
     )
 
     for filename in glob.glob(args.input_dir + "/*.csv"):
