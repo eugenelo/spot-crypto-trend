@@ -1,0 +1,8 @@
+generate_positions: rohrbach
+generate_benchmark: btc
+rebalancing_freq: 14d
+volume_max_size: 0.01
+rebalancing_buffer: 0.10
+params:
+  response_fn: exponential
+  vol_target: null   # 35% annualized

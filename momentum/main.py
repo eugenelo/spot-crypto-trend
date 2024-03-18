@@ -6,24 +6,28 @@ import numpy as np
 from datetime import datetime
 import pytz
 from pathlib import Path
+import yaml
+from typing import Callable
 
-from analysis import analysis
-from backtest import (
-    backtest_crypto,
-)
-from optimize import optimize_crypto
-from simulation import simulation
-from signal_generation import (
+from analysis.analysis import analysis
+from simulation.simulation import simulation
+from simulation.backtest import backtest_crypto
+from simulation.optimize import optimize_crypto
+from signal_generation.signal_generation import (
     create_analysis_signals,
     create_trading_signals,
 )
-from position_generation import (
-    CRYPTO_MOMO_DEFAULT_PARAMS,
-    generate_positions,
-    generate_benchmark,
-    nonempty_positions,
+from simulation.constants import DEFAULT_VOLUME_MAX_SIZE, DEFAULT_REBALANCING_BUFFER
+from position_generation.benchmark import generate_benchmark_btc
+from position_generation.utils import nonempty_positions
+from position_generation.v1 import generate_positions_v1
+from position_generation.rohrbach import generate_positions_rohrbach
+from core.utils import load_ohlc_to_daily_filtered
+from core.constants import (
+    in_universe_excl_stablecoins,
+    in_shitcoin_trending_universe,
+    in_mature_trending_universe,
 )
-from utils import load_ohlc_to_daily_filtered
 
 
 def parse_args():
@@ -51,12 +55,41 @@ def parse_args():
         "--end_date", "-e", type=str, help="End date inclusive", default="2100-01-01"
     )
     parser.add_argument("--timezone", "-t", type=str, help="Timezone", default="UTC")
+    parser.add_argument("--params_path", "-p", type=str, help="Params yaml file path")
     parser.add_argument(
-        "--initial_capital", "-c", type=int, help="Initial capital", default=12000
+        "--rebalancing_freq", "-r", type=str, help="Rebalancing frequency"
+    )
+    parser.add_argument(
+        "--initial_capital", "-c", type=float, help="Initial capital", default=12000
     )
     parser.add_argument("--skip_plots", action="store_true")
-    # TODO(@eugene.lo): Support loading params
     return parser.parse_args()
+
+
+def get_generate_positions(params: dict) -> Callable:
+    if params["generate_positions"] == "v1":
+        v1_params = params["params"]
+        generate_positions = lambda df: generate_positions_v1(df, params=v1_params)
+    elif params["generate_positions"] == "rohrbach":
+        rohrbach_params = params["params"]
+        generate_positions = lambda df: generate_positions_rohrbach(
+            df, params=rohrbach_params
+        )
+    else:
+        raise ValueError(
+            f"Unsupported 'generate_positions' argument: {params['generate_positions']}"
+        )
+    return generate_positions
+
+
+def get_generate_benchmark(params: dict) -> Callable:
+    if params["generate_benchmark"] == "btc":
+        generate_benchmark = generate_benchmark_btc
+    else:
+        raise ValueError(
+            f"Unsupported 'generate_benchmark' argument: {params['generate_benchmark']}"
+        )
+    return generate_benchmark
 
 
 if __name__ == "__main__":
@@ -76,7 +109,10 @@ if __name__ == "__main__":
 
     # Parse data
     df_daily = load_ohlc_to_daily_filtered(
-        args.input_path, input_freq=args.data_freq, tz=tz
+        args.input_path,
+        input_freq=args.data_freq,
+        tz=tz,
+        whitelist_fn=in_universe_excl_stablecoins,
     )
 
     # Create signals
@@ -95,6 +131,39 @@ if __name__ == "__main__":
         print(f"Input end_date is after end of data! Setting to {data_end}")
         end_date = data_end
 
+    # Load params
+    params = {}
+    if args.params_path is not None:
+        with open(args.params_path, "r") as yaml_file:
+            params = yaml.safe_load(yaml_file)
+        print(f"Loaded params: {params}")
+
+    # Get position and benchmark generation functions
+    assert (
+        "generate_positions" in params and "generate_benchmark" in params
+    ), "Position/Benchmark Generation functions should be specified in params!"
+    generate_positions = get_generate_positions(params)
+    generate_benchmark = get_generate_benchmark(params)
+
+    # Set input args
+    rebalancing_freq = args.rebalancing_freq
+    if "rebalancing_freq" in params:
+        if rebalancing_freq is None:
+            rebalancing_freq = params["rebalancing_freq"]
+        elif params["rebalancing_freq"] != rebalancing_freq:
+            print(
+                f"Rebalancing freq conflict! Params={params['rebalancing_freq']}, Input={rebalancing_freq}. Using input {rebalancing_freq}."
+            )
+    print(f"Rebalancing Freq: {rebalancing_freq}")
+    volume_max_size = DEFAULT_VOLUME_MAX_SIZE
+    if "volume_max_size" in params:
+        volume_max_size = params["volume_max_size"]
+    print(f"volume_max_size: {volume_max_size}")
+    rebalancing_buffer = DEFAULT_REBALANCING_BUFFER
+    if "rebalancing_buffer" in params:
+        rebalancing_buffer = params["rebalancing_buffer"]
+    print(f"rebalancing_buffer: {rebalancing_buffer}")
+
     if args.mode == "analysis":
         analysis(df_analysis)
     elif args.mode == "simulation":
@@ -108,10 +177,14 @@ if __name__ == "__main__":
     elif args.mode == "backtest":
         backtest_crypto(
             df_analysis,
+            generate_positions=generate_positions,
+            generate_benchmark=generate_benchmark,
             start_date=start_date,
             end_date=end_date,
+            rebalancing_freq=rebalancing_freq,
             initial_capital=args.initial_capital,
-            params=CRYPTO_MOMO_DEFAULT_PARAMS,
+            volume_max_size=volume_max_size,
+            rebalancing_buffer=rebalancing_buffer,
             skip_plots=args.skip_plots,
         )
     elif args.mode == "optimize":
@@ -123,7 +196,7 @@ if __name__ == "__main__":
             skip_subsample_plots=args.skip_plots,
         )
     elif args.mode == "positions":
-        positions = generate_positions(df_analysis, CRYPTO_MOMO_DEFAULT_PARAMS)
+        positions = generate_positions(df_analysis)
         nonempty_positions = nonempty_positions(positions, timestamp=end_date)
         print(nonempty_positions)
         # Output to file

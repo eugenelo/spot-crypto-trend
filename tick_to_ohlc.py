@@ -61,10 +61,10 @@ def tick_to_ohlc(
 
     if start is not None:
         # Filter on start
-        df = df.filter(pl.col("timestamp") >= pd.to_datetime(start))
+        df = df.filter(pl.col("timestamp") >= pd.to_datetime(start, utc=True))
     if end is not None:
         # Filter on start
-        df = df.filter(pl.col("timestamp") <= pd.to_datetime(end))
+        df = df.filter(pl.col("timestamp") <= pd.to_datetime(end, utc=True))
 
     print(f"Processing '{input_path}', shape: {df.shape}")
 
