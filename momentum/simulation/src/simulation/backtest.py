@@ -30,6 +30,7 @@ from simulation.stats import (
     plot_rolling_returns,
 )
 from simulation.constants import DEFAULT_VOLUME_MAX_SIZE, DEFAULT_REBALANCING_BUFFER
+from simulation.utils import get_segment_mask
 from core.utils_nb import clip_nb
 
 
@@ -137,7 +138,7 @@ def simulate(
     volume_max_size: float,
     rebalancing_buffer: float,
     initial_capital: float,
-    rebalancing_freq: str,
+    segment_mask: int = None,
     direction: Direction = Direction.LongOnly,
     fees: float = 0.0,
     fixed_fees: float = 0.0,
@@ -173,7 +174,7 @@ def simulate(
         init_cash=initial_capital,
         cash_sharing=True,
         group_by=True,
-        freq=rebalancing_freq,
+        segment_mask=segment_mask,
     )
     # fmt: on
     return pf
@@ -181,8 +182,9 @@ def simulate(
 
 def backtest(
     df_backtest: pd.DataFrame,
+    periods_per_day: int,
     initial_capital: float,
-    rebalancing_freq: str,
+    rebalancing_freq: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     with_fees: bool = True,
@@ -216,22 +218,22 @@ def backtest(
     volume = pd.pivot_table(
         volume, index="timestamp", columns="ticker", values="volume"
     )
+    # Save original close index for computing daily volume later
+    orig_close_index = close.index.copy()
     # Create positions for daily rebalancing
-    positions_daily = df_backtest[["timestamp", "ticker", "scaled_position"]]
-    positions_daily = pd.pivot_table(
-        positions_daily,
+    positions = df_backtest[["timestamp", "ticker", "scaled_position"]]
+    positions = pd.pivot_table(
+        positions,
         index="timestamp",
         columns="ticker",
         values="scaled_position",
         dropna=False,
         fill_value=0.0,
     )
-    # Resample to input rebalancing frequency
-    positions = positions_daily.resample(rebalancing_freq, origin="start_day").first()
-    # Resample price & volume data as well
-    orig_close_index = close.index.copy()
-    close = close.resample(rebalancing_freq, origin="start_day").first()
-    volume = volume.resample(rebalancing_freq, origin="start_day").first()
+    if rebalancing_freq is None:
+        segment_mask = None
+    else:
+        segment_mask = get_segment_mask(periods_per_day, rebalancing_freq)
 
     # fmt: off
     # Simulate trades without fees to calculate trading volume
@@ -242,7 +244,7 @@ def backtest(
         volume_max_size=volume_max_size,
         rebalancing_buffer=rebalancing_buffer,
         initial_capital=initial_capital,
-        rebalancing_freq=rebalancing_freq,
+        segment_mask=segment_mask,
         direction=Direction.LongOnly,
         fees=0,
     )
@@ -256,14 +258,16 @@ def backtest(
         return portfolio_no_fees
 
     # Calculate 30d rolling trading volume
-    daily_trade_volumes = portfolio_no_fees.trades.records_readable.groupby(
+    trade_volume_per_period = portfolio_no_fees.trades.records_readable.groupby(
         portfolio_no_fees.trades.records_readable["Entry Timestamp"]
     )["Size"].sum()
-    # Reindex back to daily (not rebalance freq), fill in gaps where no trades were placed
-    daily_trade_volumes = daily_trade_volumes.reindex(orig_close_index, fill_value=0)
+    # Reindex back to close index, fill in gaps where no trades were placed
+    trade_volume_per_period = trade_volume_per_period.reindex(
+        orig_close_index, fill_value=0
+    )
 
-    rolling_30d_trade_volume = daily_trade_volumes.rolling(
-        window=30, min_periods=1
+    rolling_30d_trade_volume = trade_volume_per_period.rolling(
+        window=30 * periods_per_day, min_periods=1
     ).sum()
     if verbose:
         # Plot rolling 30d volume
@@ -284,8 +288,6 @@ def backtest(
             xaxis_title="Timestamp", yaxis_title="Daily Fees (%)", hovermode="x"
         )
         fig.show()
-    # Reindex back to rebalance freq
-    dynamic_fees = dynamic_fees.reindex(close.index)
 
     # Now, simulate trades with dynamic fees. It's still not entirely accurate because trading volume
     # will depend on account size (which depends on fees), but close enough for an approximation.
@@ -296,7 +298,7 @@ def backtest(
         volume_max_size=volume_max_size,
         rebalancing_buffer=rebalancing_buffer,
         initial_capital=initial_capital,
-        rebalancing_freq=rebalancing_freq,
+        segment_mask=segment_mask,
         direction=Direction.LongOnly,
         fees=dynamic_fees,
     )
@@ -331,10 +333,11 @@ def backtest(
 def backtest_crypto(
     df_analysis: pd.DataFrame,
     generate_positions: Callable,
+    periods_per_day: int,
     start_date: str,
     end_date: str,
-    rebalancing_freq: str,
     initial_capital: float,
+    rebalancing_freq: Optional[str] = None,
     volume_max_size: float = DEFAULT_VOLUME_MAX_SIZE,
     rebalancing_buffer: float = DEFAULT_REBALANCING_BUFFER,
     generate_benchmark: Callable = generate_benchmark_btc,
@@ -358,6 +361,7 @@ def backtest_crypto(
     df_benchmark = generate_benchmark(df_analysis)
     pf_benchmark = backtest(
         df_benchmark,
+        periods_per_day=periods_per_day,
         initial_capital=initial_capital,
         rebalancing_freq=rebalancing_freq,
         start_date=start_date,
@@ -369,6 +373,7 @@ def backtest_crypto(
     df_portfolio = generate_positions(df_analysis)
     pf_portfolio = backtest(
         df_portfolio,
+        periods_per_day=periods_per_day,
         initial_capital=initial_capital,
         rebalancing_freq=rebalancing_freq,
         start_date=start_date,

@@ -11,5 +11,6 @@ py_binary(
         "//momentum/position_generation:position_generation",
         "//momentum/signal_generation:signal_generation",
         "//momentum/simulation:simulation",
+        "//data:data",
     ],
 )

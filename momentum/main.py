@@ -11,6 +11,7 @@ from typing import Callable
 
 from analysis.analysis import analysis
 from simulation.simulation import simulation
+from simulation.utils import rebal_freq_supported
 from simulation.backtest import backtest_crypto
 from simulation.optimize import optimize_crypto
 from signal_generation.signal_generation import (
@@ -22,7 +23,8 @@ from position_generation.benchmark import generate_benchmark_btc
 from position_generation.utils import nonempty_positions
 from position_generation.v1 import generate_positions_v1
 from position_generation.rohrbach import generate_positions_rohrbach
-from core.utils import load_ohlc_to_daily_filtered
+from data.utils import load_ohlc_to_hourly_filtered, load_ohlc_to_daily_filtered
+from core.utils import get_periods_per_day
 from core.constants import (
     in_universe_excl_stablecoins,
     in_shitcoin_trending_universe,
@@ -114,6 +116,12 @@ if __name__ == "__main__":
         tz=tz,
         whitelist_fn=in_universe_excl_stablecoins,
     )
+    # Infer periods per day from the timestamp column for the first ticker
+    periods_per_day = get_periods_per_day(
+        timestamp_series=df_daily.loc[
+            df_daily["ticker"] == df_daily["ticker"].unique()[0]
+        ]["timestamp"]
+    )
 
     # Create signals
     if args.mode == "analysis" or args.mode == "simulation":
@@ -154,6 +162,10 @@ if __name__ == "__main__":
             print(
                 f"Rebalancing freq conflict! Params={params['rebalancing_freq']}, Input={rebalancing_freq}. Using input {rebalancing_freq}."
             )
+    if rebalancing_freq is not None:
+        assert rebal_freq_supported(
+            rebalancing_freq
+        ), f"Rebalancing frequency {rebalancing_freq} is not supported! Use a fixed frequency instead (e.g. days)."
     print(f"Rebalancing Freq: {rebalancing_freq}")
     volume_max_size = DEFAULT_VOLUME_MAX_SIZE
     if "volume_max_size" in params:
@@ -177,6 +189,7 @@ if __name__ == "__main__":
     elif args.mode == "backtest":
         backtest_crypto(
             df_analysis,
+            periods_per_day=periods_per_day,
             generate_positions=generate_positions,
             generate_benchmark=generate_benchmark,
             start_date=start_date,
@@ -190,6 +203,7 @@ if __name__ == "__main__":
     elif args.mode == "optimize":
         optimize_crypto(
             df_analysis,
+            periods_per_day=periods_per_day,
             start_date=start_date,
             end_date=end_date,
             initial_capital=args.initial_capital,

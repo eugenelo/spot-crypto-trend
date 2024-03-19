@@ -52,6 +52,7 @@ def generate_subsample_periods(start_date, end_date, dt: relativedelta):
 
 def optimize(
     df_analysis,
+    periods_per_day,
     initial_capital,
     start_date,
     end_date,
@@ -92,11 +93,11 @@ def optimize(
         signal_spread = [0.05, 0.1, 0.2]
     # Set rebalancing sweep
     if subsample_dt is not None:
-        rebalancing_freqs = ["1d"]
+        rebalancing_freqs = [None, "1d"]
     elif DEBUG:
-        rebalancing_freqs = ["1d", "7d"]
+        rebalancing_freqs = [None, "1d", "7d"]
     else:
-        rebalancing_freqs = ["1d", "2d", "3d", "4d", "7d", "10d", "14d"]
+        rebalancing_freqs = [None, "1d", "2d", "3d", "4d", "7d", "10d", "14d"]
 
     # Subsample non-overlapping 4 month periods
     subsample_periods = [(start_date, end_date)]
@@ -146,6 +147,7 @@ def optimize(
                                 # Run backtest
                                 pf = backtest(
                                     pf_positions,
+                                    periods_per_day=periods_per_day,
                                     initial_capital=initial_capital,
                                     rebalancing_freq=pf_params["rebalancing_freq"],
                                     start_date=pf_params["start_date"],
@@ -170,6 +172,7 @@ def optimize(
 
 def optimize_crypto(
     df_analysis: pd.DataFrame,
+    periods_per_day: int,
     start_date: datetime,
     end_date: datetime,
     initial_capital: int,
@@ -179,6 +182,7 @@ def optimize_crypto(
     subsample_dt = relativedelta(months=+4)
     opt_res_signal_gen = optimize(
         df_analysis,
+        periods_per_day=periods_per_day,
         initial_capital=initial_capital,
         start_date=start_date,
         end_date=end_date,
@@ -299,8 +303,8 @@ def optimize_crypto(
     df_benchmark = generate_benchmark_btc(df_analysis)
     pf_benchmark = backtest(
         df_benchmark,
+        periods_per_day=periods_per_day,
         initial_capital=initial_capital,
-        rebalancing_freq="1d",
         start_date=start_date,
         end_date=end_date,
         verbose=False,
@@ -358,6 +362,7 @@ def optimize_crypto(
     # Optimize over rebalancing frequency
     opt_res_rebalancing = optimize(
         df_analysis,
+        periods_per_day=periods_per_day,
         initial_capital=initial_capital,
         start_date=start_date,
         end_date=end_date,

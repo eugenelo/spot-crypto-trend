@@ -2,7 +2,7 @@ import argparse
 import polars as pl
 import pandas as pd
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 import datetime
 import glob
 
@@ -14,7 +14,7 @@ def parse_args():
     parser.add_argument("--input_dir", "-di", type=str, help="Input directory")
     parser.add_argument("--output_dir", "-do", type=str, help="Output directory")
     parser.add_argument(
-        "--timeframe", "-t", type=str, default="1H", help="1Min / 1H / 1D / etc."
+        "--timeframe", "-t", type=str, default="1h", help="1m / 1h / 1d / etc."
     )
     parser.add_argument(
         "--start",
@@ -39,7 +39,7 @@ def tick_to_ohlc(
 
     Parameters:
         input_path (pathlib.Path): Filepath to input_path csv.
-        timeframe (str): Timeframe for OHLC data (e.g., '1Min', '1H', '1D').
+        timeframe (str): Timeframe for OHLC data (e.g., '1m', '1h', '1d').
         start (Optional[str]): Starting UTC date before which to filter out data.
         end (Optional[str]): Ending UTC date after which to filter out data.
 
@@ -47,13 +47,13 @@ def tick_to_ohlc(
         pandas DataFrame: DataFrame containing OHLC data.
     """
     # Convert tick data to DataFrame
-    df = pl.read_csv(
+    df_tick = pl.read_csv(
         input_path, has_header=False, new_columns=["timestamp", "price", "volume"]
     )
-    df = df.with_columns(dollar_volume=pl.col("price") * pl.col("volume"))
+    df_tick = df_tick.with_columns(dollar_volume=pl.col("price") * pl.col("volume"))
 
     # Convert timestamp column to datetime
-    df = df.with_columns(
+    df_tick = df_tick.with_columns(
         pl.col("timestamp").map_elements(
             lambda x: datetime.datetime.utcfromtimestamp(x)
         )
@@ -61,15 +61,21 @@ def tick_to_ohlc(
 
     if start is not None:
         # Filter on start
-        df = df.filter(pl.col("timestamp") >= pd.to_datetime(start, utc=True))
+        df_tick = df_tick.filter(pl.col("timestamp") >= pd.to_datetime(start, utc=True))
     if end is not None:
         # Filter on start
-        df = df.filter(pl.col("timestamp") <= pd.to_datetime(end, utc=True))
+        df_tick = df_tick.filter(pl.col("timestamp") <= pd.to_datetime(end, utc=True))
 
-    print(f"Processing '{input_path}', shape: {df.shape}")
+    print(f"Processing '{input_path}', shape: {df_tick.shape}")
 
-    # Group by the resampled timeframe and calculate OHLC
-    ohlc_data = df.group_by_dynamic("timestamp", every="1h").agg(
+    # Define a custom aggregation function to compute VWAP
+    def compute_vwap(args: List[pl.Series]) -> pl.Series:
+        price = args[0]
+        volume = args[1]
+        return (price * volume).sum() / volume.sum()
+
+    # Resample and compute OHLCV + VWAP
+    df_ohlcv = df_tick.group_by_dynamic("timestamp", every=timeframe).agg(
         [
             pl.col("price").first().alias("open"),
             pl.col("price").max().alias("high"),
@@ -77,11 +83,26 @@ def tick_to_ohlc(
             pl.col("price").last().alias("close"),
             pl.col("volume").sum().alias("volume"),
             pl.col("dollar_volume").sum().alias("dollar_volume"),
+            pl.map_groups(exprs=["price", "volume"], function=compute_vwap).alias(
+                "vwap"
+            ),
         ]
     )
-    # TODO(@eugene.lo): Add vwap
-
-    return ohlc_data
+    # Fill in missing dates
+    df_ohlcv = df_ohlcv.upsample(time_column="timestamp", every=timeframe)
+    # Fill in close first to avoid having to shift
+    df_ohlcv = df_ohlcv.with_columns(pl.col("close").fill_null(strategy="forward"))
+    df_ohlcv = df_ohlcv.with_columns(
+        [
+            pl.col("open").fill_null(pl.col("close")),
+            pl.col("high").fill_null(pl.col("close")),
+            pl.col("low").fill_null(pl.col("close")),
+            pl.col("volume").fill_null(pl.lit(0)),
+            pl.col("dollar_volume").fill_null(pl.lit(0)),
+            pl.col("vwap").fill_null(pl.col("close")),
+        ]
+    )
+    return df_ohlcv
 
 
 def main(
@@ -108,13 +129,6 @@ def main(
         input_path=input_path, timeframe=timeframe, start=start, end=end
     )
     ticker = input_path.stem
-    # Hack to fix ticker names
-    if ticker == "XBTUSD":
-        ticker = "BTC/USD"
-    elif ticker == "ETHUSD":
-        ticker = "ETH/USD"
-    elif ticker == "MATICUSD":
-        ticker = "MATIC/USD"
     ohlc = ohlc.with_columns(pl.lit(ticker).alias("ticker"))
 
     if output_path is None:
@@ -153,6 +167,11 @@ if __name__ == "__main__":
     else:
         for filename in glob.glob(args.input_dir + "/*.csv"):
             input_path = Path(filename)
+
+            if not input_path.stem.endswith("USD"):
+                # Only process USD pairs
+                continue
+
             output_path = (
                 (Path(args.output_dir) / f"{input_path.stem}_OHLC{input_path.suffix}")
                 if args.output_dir

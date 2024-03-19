@@ -10,6 +10,8 @@ import pytz
 
 import sys
 
+from data.utils import load_ohlc_to_daily_filtered, load_ohlc_to_hourly_filtered
+from data.constants import OHLC_COLUMNS
 from position_generation.v1 import (
     generate_positions_v1,
 )
@@ -17,11 +19,7 @@ from position_generation.utils import (
     nonempty_positions,
 )
 from signal_generation.signal_generation import create_trading_signals
-from core.utils import (
-    load_ohlc_to_daily_filtered,
-    load_ohlc_to_hourly_filtered,
-    filter_universe,
-)
+from core.utils import filter_universe
 from core.constants import (
     in_universe_excl_stablecoins,
     in_shitcoin_trending_universe,
@@ -124,19 +122,7 @@ def fetch_data(
     print(f"Fetched data for {len(ohlcvs)} valid USD pairs")
 
     # Process OHLCV data into a DataFrame
-    ohlc_combined = pd.DataFrame(
-        columns=[
-            "timestamp",
-            "open",
-            "high",
-            "low",
-            "close",
-            "vwap",
-            "volume",
-            "dollar_volume",
-            "ticker",
-        ]
-    )
+    ohlc_combined = pd.DataFrame(columns=OHLC_COLUMNS)
     ohlc_combined["timestamp"] = pd.to_datetime(
         ohlc_combined["timestamp"], utc=True, unit="ms"
     )

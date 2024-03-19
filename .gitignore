@@ -42,3 +42,5 @@ user.bazelrc
 MODULE*
 # Ignore venv
 .venv/
+# Ignore tmp stuff
+**/tmp*

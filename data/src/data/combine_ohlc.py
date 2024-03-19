@@ -6,6 +6,8 @@ from typing import Optional
 from datetime import datetime
 import glob
 
+from data.constants import OHLC_COLUMNS
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Combine OHLC data into a single file")
@@ -29,36 +31,29 @@ def main(
         input_dir (pathlib.Path): Input file directory
         output_path (Optional[pathlib.Path]): Filepath to output csv.
     """
-    ohlc_final = pd.DataFrame(
-        columns=[
-            "timestamp",
-            "open",
-            "high",
-            "low",
-            "close",
-            "vwap",
-            "volume",
-            "dollar_volume",
-            "ticker",
-        ]
-    )
+    df_ohlc = pd.DataFrame(columns=OHLC_COLUMNS)
 
     for filename in glob.glob(args.input_dir + "/*.csv"):
-        if "USD_" not in filename:
-            # Only process USD pairs
-            continue
-
         input_path = Path(filename)
         print(f"Processing {input_path}")
 
         with input_path.open() as fin:
-            df = pd.read_csv(fin)
-            ohlc_final = pd.concat([ohlc_final, df], ignore_index=True)
+            df_single = pd.read_csv(fin)
+            df_ohlc = pd.concat([df_ohlc, df_single], ignore_index=True)
+
+    # Remove duplicates
+    df_ohlc.sort_values(by=["timestamp", "ticker"], ascending=True, inplace=True)
+    df_ohlc.drop_duplicates(
+        subset=["timestamp", "ticker"],
+        keep="first",  # Keep the latest available data
+        inplace=True,
+    )
+    df_ohlc.index = pd.RangeIndex(len(df_ohlc.index))
 
     # Output file
     output_path = Path(args.output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    ohlc_final.to_csv(str(output_path))
+    df_ohlc.to_csv(str(output_path))
     print(f"Converted files from '{input_dir}' into final file '{output_path}'")
 
 

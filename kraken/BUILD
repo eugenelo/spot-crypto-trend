@@ -12,5 +12,18 @@ py_binary(
         "//momentum/signal_generation:signal_generation",
         "//momentum/simulation:simulation",
         "//momentum/core:core",
+        "//data:data",
+    ],
+)
+
+py_binary(
+    name="convert_kraken_symbols",
+    srcs = [
+        "src/kraken/convert_kraken_symbols.py",
+    ],
+    deps = [
+        requirement("ccxt"),
+        requirement("pytz"),
+        "//data:data",
     ],
 )

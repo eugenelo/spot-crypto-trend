@@ -9,10 +9,7 @@ from pathlib import Path
 
 import sys
 
-sys.path.append("momentum")
-from momentum.utils import (
-    load_ohlc_csv,
-)
+from data.utils import load_ohlc_csv
 
 
 def parse_args():
@@ -28,19 +25,31 @@ def parse_args():
     return parser.parse_args()
 
 
+SYMBOL_SPECIAL_CASES = {
+    # BTC symbol from downloaded tick data differs from API
+    "XBTUSD": "BTC/USD",
+    # REP v1 and v2 still both trade in separate markets on Kraken
+    "REPUSD": "REP/USD",
+    "REPV2USD": "REPV2/USD",
+}
+
+
 def convert_tickers(kraken: ccxt.kraken, input_path: str, output_path: str):
     print(f"Available Symbols: {kraken.symbols}")
 
     df = load_ohlc_csv(input_path)
     tickers = df["ticker"].unique()
     for kraken_symbol in tickers:
-        try:
-            market = kraken.markets_by_id[kraken_symbol][0]
-            ccxt_symbol = market["symbol"]
-        except Exception:
-            print(f"Failed to find {kraken_symbol} on ccxt! Converting manually.")
-            kraken_symbol = kraken_symbol.replace("/", "")
-            ccxt_symbol = kraken_symbol[:-3] + "/" + kraken_symbol[-3:]
+        if kraken_symbol in SYMBOL_SPECIAL_CASES:
+            ccxt_symbol = SYMBOL_SPECIAL_CASES[kraken_symbol]
+        else:
+            try:
+                market = kraken.markets_by_id[kraken_symbol][0]
+                ccxt_symbol = market["symbol"]
+            except Exception:
+                print(f"Failed to find {kraken_symbol} on ccxt! Converting manually.")
+                kraken_symbol = kraken_symbol.replace("/", "")
+                ccxt_symbol = kraken_symbol[:-3] + "/" + kraken_symbol[-3:]
         print(f"{kraken_symbol} -> {ccxt_symbol}")
         df.loc[df["ticker"] == kraken_symbol, "ticker"] = ccxt_symbol
     # Write output

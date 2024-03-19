@@ -1,5 +1,20 @@
 load("@pip_deps//:requirements.bzl", "requirement")
 
+py_library(
+    name = "data",
+    srcs = [
+        "src/data/constants.py",
+        "src/data/utils.py",
+    ],
+    imports = ["src"],
+    deps = [
+        requirement("pandas"),
+        requirement("pytz"),
+        "//momentum/core:core",
+    ],
+    visibility = ["//visibility:public"]
+)
+
 py_binary(
     name="combine_ohlc",
     srcs = [
@@ -8,6 +23,7 @@ py_binary(
     deps = [
         requirement("pandas"),
         requirement("polars"),
+        ":data",
     ],
 )
 

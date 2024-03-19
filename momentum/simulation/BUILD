@@ -20,3 +20,12 @@ py_test(
     ],
     size="small",
 )
+
+py_test(
+    name="test_utils",
+    srcs = ["test/test_utils.py"],
+    deps = [
+        ":simulation"
+    ],
+    size="small",
+)

@@ -46,7 +46,6 @@ class TestBacktestSingleAsset(unittest.TestCase):
             volume_max_size=volume_max_size,
             rebalancing_buffer=rebalancing_buffer,
             initial_capital=initial_capital,
-            rebalancing_freq="1d",
         )
         # Entry Trades
         entry_trades = pf.entry_trades.records_readable.sort_values(
@@ -94,7 +93,6 @@ class TestBacktestSingleAsset(unittest.TestCase):
             volume_max_size=volume_max_size,
             rebalancing_buffer=rebalancing_buffer,
             initial_capital=initial_capital,
-            rebalancing_freq="1d",
         )
         # Entry Trades
         entry_trades = pf.entry_trades.records_readable.sort_values(
@@ -140,7 +138,6 @@ class TestBacktestSingleAsset(unittest.TestCase):
             volume_max_size=volume_max_size,
             rebalancing_buffer=rebalancing_buffer,
             initial_capital=initial_capital,
-            rebalancing_freq="1d",
         )
 
         # Entry Trades
@@ -213,7 +210,6 @@ class TestBacktestMultiAsset(unittest.TestCase):
             volume_max_size=volume_max_size,
             rebalancing_buffer=rebalancing_buffer,
             initial_capital=initial_capital,
-            rebalancing_freq="1d",
         )
 
         # Entry Trades
@@ -266,7 +262,6 @@ class TestBacktestMultiAsset(unittest.TestCase):
             volume_max_size=volume_max_size,
             rebalancing_buffer=rebalancing_buffer,
             initial_capital=initial_capital,
-            rebalancing_freq="1d",
         )
 
         # Entry Trades
@@ -347,7 +342,6 @@ class TestBacktestMultiAsset(unittest.TestCase):
             volume_max_size=volume_max_size,
             rebalancing_buffer=rebalancing_buffer,
             initial_capital=initial_capital,
-            rebalancing_freq="1d",
         )
 
         # Entry Trades
