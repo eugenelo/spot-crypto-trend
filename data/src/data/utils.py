@@ -125,6 +125,7 @@ def _resample_ohlc_hour_to_day(df_hourly: pd.DataFrame) -> pd.DataFrame:
         )
         .reset_index()
     )
+    df_daily["vwap"] = df_daily["dollar_volume"] / df_daily["volume"]
     df_daily["timestamp"] = pd.to_datetime(df_daily["timestamp"])
     df_daily = df_daily.sort_values(by=["ticker", "timestamp"])
     return df_daily

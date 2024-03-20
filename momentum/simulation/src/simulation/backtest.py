@@ -212,14 +212,14 @@ def backtest(
 
     # Transform data from long to wide
     df_backtest = df_backtest.sort_values(["timestamp", "ticker"])
-    close = df_backtest[["timestamp", "ticker", "close"]]
-    close = pd.pivot_table(close, index="timestamp", columns="ticker", values="close")
+    price = df_backtest[["timestamp", "ticker", "close"]]
+    price = pd.pivot_table(price, index="timestamp", columns="ticker", values="close")
     volume = df_backtest[["timestamp", "ticker", "volume"]]
     volume = pd.pivot_table(
         volume, index="timestamp", columns="ticker", values="volume"
     )
-    # Save original close index for computing daily volume later
-    orig_close_index = close.index.copy()
+    # Save original price index for computing daily volume later
+    orig_price_index = price.index.copy()
     # Create positions for daily rebalancing
     positions = df_backtest[["timestamp", "ticker", "scaled_position"]]
     positions = pd.pivot_table(
@@ -238,7 +238,7 @@ def backtest(
     # fmt: off
     # Simulate trades without fees to calculate trading volume
     portfolio_no_fees = simulate(
-        price=close,
+        price=price,
         positions=positions,
         volume=volume,
         volume_max_size=volume_max_size,
@@ -261,9 +261,9 @@ def backtest(
     trade_volume_per_period = portfolio_no_fees.trades.records_readable.groupby(
         portfolio_no_fees.trades.records_readable["Entry Timestamp"]
     )["Size"].sum()
-    # Reindex back to close index, fill in gaps where no trades were placed
+    # Reindex back to price index, fill in gaps where no trades were placed
     trade_volume_per_period = trade_volume_per_period.reindex(
-        orig_close_index, fill_value=0
+        orig_price_index, fill_value=0
     )
 
     rolling_30d_trade_volume = trade_volume_per_period.rolling(
@@ -292,7 +292,7 @@ def backtest(
     # Now, simulate trades with dynamic fees. It's still not entirely accurate because trading volume
     # will depend on account size (which depends on fees), but close enough for an approximation.
     portfolio_with_fees = simulate(
-        price=close,
+        price=price,
         positions=positions,
         volume=volume,
         volume_max_size=volume_max_size,

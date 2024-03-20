@@ -11,3 +11,12 @@ py_library(
     ],
     visibility = ["//visibility:public"],
 )
+
+py_test(
+    name="test_common",
+    srcs = ["test/test_common.py"],
+    deps = [
+        ":signal_generation"
+    ],
+    size="small",
+)

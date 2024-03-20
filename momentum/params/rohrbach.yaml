@@ -5,4 +5,4 @@ volume_max_size: 0.01
 rebalancing_buffer: 0.10
 params:
   response_fn: exponential
-  vol_target: null   # 35% annualized
+  vol_target: 1.0   # 35% annualized

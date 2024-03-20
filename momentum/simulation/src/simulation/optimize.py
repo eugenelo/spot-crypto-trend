@@ -85,7 +85,7 @@ def optimize(
         ]
         position_types = [
             "simple",
-            # "quintile",
+            # "decile",
             # "crossover",
         ]
         num_asset_thresholds = [int(1e6)]

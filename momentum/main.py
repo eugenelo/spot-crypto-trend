@@ -110,7 +110,7 @@ if __name__ == "__main__":
     )
 
     # Parse data
-    df_daily = load_ohlc_to_daily_filtered(
+    df_ohlc = load_ohlc_to_daily_filtered(
         args.input_path,
         input_freq=args.data_freq,
         tz=tz,
@@ -118,16 +118,16 @@ if __name__ == "__main__":
     )
     # Infer periods per day from the timestamp column for the first ticker
     periods_per_day = get_periods_per_day(
-        timestamp_series=df_daily.loc[
-            df_daily["ticker"] == df_daily["ticker"].unique()[0]
+        timestamp_series=df_ohlc.loc[
+            df_ohlc["ticker"] == df_ohlc["ticker"].unique()[0]
         ]["timestamp"]
     )
 
     # Create signals
     if args.mode == "analysis" or args.mode == "simulation":
-        df_analysis = create_analysis_signals(df_daily)
+        df_analysis = create_analysis_signals(df_ohlc)
     else:
-        df_analysis = create_trading_signals(df_daily)
+        df_analysis = create_trading_signals(df_ohlc)
 
     # Validate dates
     data_start = df_analysis["timestamp"].min()

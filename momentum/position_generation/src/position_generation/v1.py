@@ -12,7 +12,7 @@ CRYPTO_MOMO_DEFAULT_PARAMS = {
     "type": "simple",
     "rebalancing_freq": "1d",
 }
-position_types = ["simple", "quintile", "crossover"]
+position_types = ["simple", "decile", "crossover"]
 
 
 def generate_positions_v1(df: pd.DataFrame, params: dict):
@@ -20,7 +20,7 @@ def generate_positions_v1(df: pd.DataFrame, params: dict):
     assert not df.duplicated(subset=["ticker", "timestamp"], keep=False).any()
 
     momentum_factor = params["momentum_factor"]
-    quintile_factor = momentum_factor.split("_")[0] + "_log_quintile"
+    decile_factor = momentum_factor.split("_")[0] + "_log_returns_decile"
     num_assets_to_keep = params["num_assets_to_keep"]
     min_signal_threshold = params["min_signal_threshold"]
     max_signal_threshold = params["max_signal_threshold"]
@@ -31,7 +31,7 @@ def generate_positions_v1(df: pd.DataFrame, params: dict):
         "timestamp",
         momentum_factor,
         "volume_consistent",
-        quintile_factor,
+        decile_factor,
     ]
     df_operate = df[cols_to_keep].dropna()
 
@@ -43,14 +43,14 @@ def generate_positions_v1(df: pd.DataFrame, params: dict):
     )
     df["rank"] = df["rank"].fillna(np.inf)
     df["signal_simple"] = (df["rank"] <= num_assets_to_keep) & (df["volume_consistent"])
-    df["signal_quintile"] = (
+    df["signal_decile"] = (
         (df["rank"] <= num_assets_to_keep)
-        & (df[quintile_factor] == 4)
+        & (df[decile_factor] >= 8)
         & (df["volume_consistent"])
     )
     # df["signal_ema"] = (
     #     (df["rank"] <= num_assets_to_keep)
-    #     # & (df[quintile_factor] == 4)
+    #     # & (df[decile_factor] >= 8)
     #     & (df["9d_ema"] >= df["26d_ema"])
     #     & (df["volume_consistent"])
     # )
@@ -65,14 +65,14 @@ def generate_positions_v1(df: pd.DataFrame, params: dict):
         else 0,
         axis=1,
     )
-    df["position_quintile"] = df.apply(
+    df["position_decile"] = df.apply(
         lambda x: np.clip(
             (x[momentum_factor] - min_signal_threshold)
             / (max_signal_threshold - min_signal_threshold),
             0,
             1,
         )
-        if x["signal_quintile"]
+        if x["signal_decile"]
         else 0,
         axis=1,
     )

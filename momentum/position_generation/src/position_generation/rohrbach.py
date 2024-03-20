@@ -16,9 +16,10 @@ def generate_positions_rohrbach(df: pd.DataFrame, params: dict):
     else:
         raise ValueError(f"Invalid response function: {params['response_fn']}")
 
-    vol_short = "close_30d_sd"
-    vol_medium = "close_182d_sd"
-    vol_long = "close_365d_sd"
+    # Generate volatility forecasts
+    vol_short = "price_30d_sd"
+    vol_medium = "price_182d_sd"
+    vol_long = "price_365d_sd"
     vol_forecast = "vol_forecast"
     df.loc[
         (~df[vol_long].isna()) & (~df[vol_medium].isna()) & (~df[vol_short].isna()),
@@ -63,7 +64,7 @@ def generate_positions_rohrbach(df: pd.DataFrame, params: dict):
     else:
         # Scale in proportion to total signal
         # This will scale positions up when signals are weak and scale positions down when signals are strong...
-        df["total_weight"] = df.groupby("timestamp")[scaled_signal_col].transform(sum)
+        df["total_weight"] = df.groupby("timestamp")[scaled_signal_col].transform("sum")
         df["scaled_position"] = (
             df[scaled_signal_col].fillna(value=0.0) / df["total_weight"]
         )

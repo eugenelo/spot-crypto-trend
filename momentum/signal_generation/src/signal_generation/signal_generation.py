@@ -2,7 +2,20 @@ import pandas as pd
 import plotly.express as px
 import numpy as np
 
+from signal_generation.common import (
+    sort_dataframe,
+    returns,
+    log_returns,
+    future_returns,
+    future_log_returns,
+    ema,
+    volatility,
+    rolling_sum,
+    bins,
+)
 from core.utils import apply_hysteresis
+
+PRICE_COLUMN = "vwap"
 
 
 def create_analysis_signals(
@@ -17,30 +30,23 @@ def create_analysis_signals(
     Returns:
         pd.DataFrame: Dataframe with analysis signals.
     """
+    df_ohlc = sort_dataframe(df_ohlc)
+
     df_signals = create_trading_signals(df_ohlc)
 
     # Calculate future returns
     for lookahead_days in [1, 5, 6, 7, 10, 14, 21, 28]:
-        colname = f"next_{lookahead_days}d_returns"
         periods = lookahead_days * periods_per_day
-        df_signals[colname] = (
-            df_signals.groupby("ticker")["close"]
-            .pct_change(periods=periods)
-            .shift(-periods)
+        # Simple returns
+        colname = f"next_{lookahead_days}d_returns"
+        df_signals[colname] = future_returns(
+            df_signals, column=PRICE_COLUMN, periods=periods
         )
+        # Log returns
         colname = f"next_{lookahead_days}d_log_returns"
-        df_signals[colname] = (
-            df_signals.groupby("ticker")["log_returns"]
-            .rolling(periods)
-            .sum()
-            .reset_index(0, drop=True)
-            .shift(-periods)
+        df_signals[colname] = future_log_returns(
+            df_signals, column=PRICE_COLUMN, periods=periods
         )
-
-    # Add cols, remove NAs
-    df_signals["day"] = pd.DatetimeIndex(df_signals["timestamp"]).day
-    df_signals["month"] = pd.DatetimeIndex(df_signals["timestamp"]).month
-    df_signals["year"] = pd.DatetimeIndex(df_signals["timestamp"]).year
 
     return df_signals
 
@@ -57,56 +63,44 @@ def create_trading_signals(
     Returns:
         pd.DataFrame: Dataframe with trading signals.
     """
-    df_signals = df_ohlc.copy().sort_values(by=["ticker", "timestamp"], ascending=True)
+    df_signals = sort_dataframe(df_ohlc)
 
     # Calculate returns
-    df_signals["returns"] = df_signals.groupby("ticker")["close"].pct_change(periods=1)
-    df_signals["log_returns"] = (
-        np.log(df_signals["close"]).groupby(df_signals.ticker).diff()
-    )
+    df_signals["returns"] = returns(df_signals, column=PRICE_COLUMN, periods=1)
+    df_signals["log_returns"] = log_returns(df_signals, column=PRICE_COLUMN, periods=1)
 
     # Calculate EMAs.
-    multiplier = 1
     for lookback_days in [8, 16, 32, 24, 48, 96]:
-        lookback_days = int(lookback_days * multiplier)
-        df_signals[f"{lookback_days}d_ema"] = (
-            df_signals.groupby("ticker")["close"]
-            .ewm(span=lookback_days * periods_per_day)
-            .mean()
-            .reset_index(0, drop=True)
+        periods = lookback_days * periods_per_day
+        df_signals[f"{lookback_days}d_ema"] = ema(
+            df_signals, column=PRICE_COLUMN, periods=periods
         )
     # Below calculations reference Rohrbach et. al. (2017)
     # Calculate x_k
     for k, pair in enumerate([(8, 24), (16, 48), (32, 96)]):
-        s, l = int(pair[0] * multiplier), int(pair[1] * multiplier)
+        s, l = pair[0], pair[1]
         df_signals[f"x_{k}"] = df_signals[f"{s}d_ema"] - df_signals[f"{l}d_ema"]
     # Calculate annualized volatility on prices
     for lookback_days in [30, 91, 182, 365]:
-        lookback_days = int(lookback_days * multiplier)
-        df_signals[f"close_{lookback_days}d_sd"] = (
-            df_signals.groupby("ticker")["returns"]
-            .rolling(lookback_days * periods_per_day)
-            .std()
-            .reset_index(0, drop=True)
+        periods = lookback_days * periods_per_day
+        df_signals[f"price_{lookback_days}d_sd"] = volatility(
+            df_signals, column="returns", periods=periods
         ) * np.sqrt(365 / lookback_days)
     # Calculate y_k (normalize)
-    lookback_days = int(91 * multiplier)
+    lookback_days = 91
     for k in [0, 1, 2]:
         df_signals[f"y_{k}"] = (
-            df_signals[f"x_{k}"] / df_signals[f"close_{lookback_days}d_sd"]
+            df_signals[f"x_{k}"] / df_signals[f"price_{lookback_days}d_sd"]
         )
     # Calculate annualized volatility on y_k
+    lookback_days = 365
+    periods = lookback_days * periods_per_day
     for k in [0, 1, 2]:
-        for lookback_days in [365]:
-            lookback_days = int(lookback_days * multiplier)
-            df_signals[f"y_{k}_{lookback_days}d_sd"] = (
-                df_signals.groupby("ticker")[f"y_{k}"]
-                .rolling(lookback_days * periods_per_day)
-                .std()
-                .reset_index(0, drop=True)
-            ) * np.sqrt(365 / lookback_days)
+        df_signals[f"y_{k}_{lookback_days}d_sd"] = volatility(
+            df_signals, column=f"y_{k}", periods=periods
+        ) * np.sqrt(365 / lookback_days)
     # Calculate z_k (normalize) and u_k (response)
-    lookback_days = int(365 * multiplier)
+    lookback_days = 365
     u_k_denom = np.sqrt(2) * np.exp(-0.5)
     for k in [0, 1, 2]:
         df_signals[f"z_{k}"] = (
@@ -132,12 +126,10 @@ def create_trading_signals(
 
     # Calculate volume features
     for lookback_days in [1, 30]:
+        periods = lookback_days * periods_per_day
         colname = f"{lookback_days}d_dollar_volume"
-        df_signals[colname] = (
-            df_signals.groupby("ticker")["dollar_volume"]
-            .rolling(lookback_days * periods_per_day)
-            .sum()
-            .reset_index(0, drop=True)
+        df_signals[colname] = rolling_sum(
+            df_signals, column="dollar_volume", periods=periods
         )
     df_signals["1d_volume_above_5M"] = df_signals["1d_dollar_volume"] >= 5e6
     df_signals["30d_num_days_volume_above_5M"] = (
@@ -160,30 +152,33 @@ def create_trading_signals(
         # Returns
         ret_colname = f"{lookback_days}d_returns"
         periods = lookback_days * periods_per_day
-        df_signals[ret_colname] = df_signals.groupby("ticker")["close"].pct_change(
-            periods=periods
+        df_signals[ret_colname] = returns(
+            df_signals, column=PRICE_COLUMN, periods=periods
         )
         # Log returns
         logret_colname = f"{lookback_days}d_log_returns"
-        df_signals[logret_colname] = (
-            df_signals.groupby("ticker")["log_returns"]
-            .rolling(periods)
-            .sum()
-            .reset_index(0, drop=True)
+        df_signals[logret_colname] = log_returns(
+            df_signals, column=PRICE_COLUMN, periods=periods
         )
         # Quintiles
-        quintile_colname = f"{lookback_days}d_log_quintile"
-        df_signals[quintile_colname] = pd.qcut(
-            df_signals[logret_colname], 10, labels=False
+        decile_colname = f"{lookback_days}d_returns_decile"
+        df_signals[decile_colname] = bins(df_signals, column=ret_colname, num_bins=10)
+        decile_colname = f"{lookback_days}d_log_returns_decile"
+        df_signals[decile_colname] = bins(
+            df_signals, column=logret_colname, num_bins=10
         )
     try:
-        df_signals["trend_quintile"] = pd.qcut(
-            df_signals["trend_signal"], 10, labels=False
+        df_signals["trend_decile"] = bins(
+            df_signals, column="trend_signal", num_bins=10
+        )
+        df_signals["trend_sigmoid_decile"] = bins(
+            df_signals, column="trend_signal_sigmoid", num_bins=10
         )
     except Exception:
-        df_signals["trend_quintile"] = np.nan
+        df_signals["trend_decile"] = np.nan
+        df_signals["trend_sigmoid_decile"] = np.nan
 
-    # Add cols, remove NAs
+    # Add helper cols
     df_signals["day"] = pd.DatetimeIndex(df_signals["timestamp"]).day
     df_signals["month"] = pd.DatetimeIndex(df_signals["timestamp"]).month
     df_signals["year"] = pd.DatetimeIndex(df_signals["timestamp"]).year

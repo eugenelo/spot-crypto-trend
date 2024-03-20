@@ -9,6 +9,7 @@ py_binary(
     requirement("pytz"),
     requirement("jupyterlab"),
     requirement("notebook"),
+    "//data:data",
     "//momentum/analysis:analysis",
     "//momentum/core:core",
     "//momentum/position_generation:position_generation",

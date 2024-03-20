@@ -7,7 +7,7 @@ def analysis(
     df_analysis: pd.DataFrame,
     feature: str = "trend_signal",
     target: str = "next_7d_log_returns",
-    quintile_feature: str = "trend_quintile",
+    bin_feature: str = "trend_decile",
 ):
     df_analysis = df_analysis.dropna()
 
@@ -44,7 +44,7 @@ def analysis(
     df_tmp = (
         df_analysis.groupby(
             [
-                quintile_feature,
+                bin_feature,
             ]
         )
         .agg({target: "mean"})
@@ -52,7 +52,7 @@ def analysis(
     )
     fig = px.bar(
         df_tmp,
-        x=quintile_feature,
+        x=bin_feature,
         y=target,
     )
     fig.show()
@@ -62,7 +62,7 @@ def analysis(
         df_analysis.groupby(
             [
                 "year",
-                quintile_feature,
+                bin_feature,
             ]
         )
         .agg({target: "mean"})
@@ -70,7 +70,7 @@ def analysis(
     )
     fig = px.bar(
         df_tmp,
-        x=quintile_feature,
+        x=bin_feature,
         y=target,
         facet_col="year",
     )
