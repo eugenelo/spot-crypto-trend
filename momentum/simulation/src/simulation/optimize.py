@@ -7,7 +7,7 @@ from functools import reduce
 import datetime
 from dateutil.relativedelta import relativedelta
 from tqdm.auto import tqdm
-from typing import List
+from typing import List, Callable, Optional
 
 from simulation.backtest import backtest
 from simulation.stats import get_stats_of_interest, plot_cumulative_returns
@@ -415,3 +415,74 @@ def optimize_crypto(
     best_rebal_idx = best_portfolios_rebal_idx[0]
     print(f"Final Params: {opt_res_rebalancing[best_rebal_idx].params}")
     return opt_res_rebalancing[best_rebal_idx]
+
+
+def optimize_rebalancing_buffer(
+    df_analysis: pd.DataFrame,
+    periods_per_day: int,
+    generate_positions: Callable,
+    start_date: datetime,
+    end_date: datetime,
+    initial_capital: int,
+    rebalancing_freq: Optional[str],
+    volume_max_size: float,
+    skip_plots: bool,
+):
+    # Generate positions
+    df_portfolio = generate_positions(df_analysis)
+
+    # Optimize value of rebalancing buffer which yields highest net sharpe
+    rebal_buffer_to_pf = {}
+    step_size = 0.001
+    num_steps = 50
+    for i in range(num_steps):
+        rebalancing_buffer = i * step_size
+        pf_portfolio = backtest(
+            df_portfolio,
+            periods_per_day=periods_per_day,
+            initial_capital=initial_capital,
+            rebalancing_freq=rebalancing_freq,
+            start_date=start_date,
+            end_date=end_date,
+            with_fees=True,
+            volume_max_size=volume_max_size,
+            rebalancing_buffer=rebalancing_buffer,
+            verbose=False,
+        )
+        rebal_buffer_to_pf[rebalancing_buffer] = pf_portfolio
+
+    # Print stats
+    stats = []
+    portfolios = []
+    pf_names = []
+    for rebalancing_buffer, pf in rebal_buffer_to_pf.items():
+        pf_name = f"Rebal Buffer {rebalancing_buffer * 100:.4f}%"
+        stats.append(get_stats_of_interest(pf, name=pf_name))
+        portfolios.append(pf)
+        pf_names.append(pf_name)
+    df_stats = reduce(
+        lambda left, right: pd.merge(left, right, on=["index"], how="outer"),
+        stats,
+    ).set_index("index")
+    df_stats = df_stats.T
+    comparison_metric = "Sharpe Ratio"
+    print(
+        df_stats.sort_values(by=[comparison_metric], ascending=[False])[
+            [
+                "Sharpe Ratio",
+                "Total Fees Paid [$]",
+                "Total Trades",
+                "Total Return [%]",
+                "Max Drawdown [%]",
+                "Annualized Return [%]",
+                "Annualized Volatility [%]",
+            ]
+        ]
+    )
+    print()
+
+    if not skip_plots:
+        # best_portfolios_idx = df_stats.sort_values(
+        #     by=[comparison_metric], ascending=[False]
+        # ).index
+        plot_cumulative_returns(portfolios, pf_names)

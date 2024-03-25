@@ -12,6 +12,8 @@ from signal_generation.common import (
     ema,
     ema_daily,
     volatility,
+    future_volatility,
+    volatility_ema,
     rolling_sum,
     bins,
 )
@@ -264,6 +266,32 @@ class TestSimulationUtils(unittest.TestCase):
                     self.assertTrue(np.isnan(s_3d_vol.iloc[i]))
                 else:
                     self.assertAlmostEqual(expected_3d_vol[i], s_3d_vol.iloc[i])
+
+    def test_future_volatility(self):
+        df_prices, start_date = self.setup()
+
+        # 3 period stddev
+        df_prices["next_3d_vol"] = future_volatility(
+            df_prices, column="close", periods=3
+        )
+        for ticker in ["A", "B"]:
+            df_ticker = df_prices.loc[df_prices["ticker"] == ticker]
+            prices = df_ticker["close"]
+            s_3d_future_vol = df_ticker["next_3d_vol"]
+            expected_3d_future_vol = [
+                np.std(prices[0:3], ddof=1),
+                np.std(prices[1:4], ddof=1),
+                np.std(prices[2:5], ddof=1),
+                np.nan,
+                np.nan,
+            ]
+            for i in range(len(expected_3d_future_vol)):
+                if np.isnan(expected_3d_future_vol[i]):
+                    self.assertTrue(np.isnan(s_3d_future_vol.iloc[i]))
+                else:
+                    self.assertAlmostEqual(
+                        expected_3d_future_vol[i], s_3d_future_vol.iloc[i]
+                    )
 
     def test_rolling_sum(self):
         df_prices, start_date = self.setup()

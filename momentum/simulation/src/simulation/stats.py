@@ -28,8 +28,13 @@ def get_stats_of_interest(portfolio: vbt.Portfolio, name: str):
         {
             "Annualized Return [%]": 100.0 * portfolio.annualized_return(),
             "Annualized Volatility [%]": 100.0 * portfolio.annualized_volatility(),
+            "Avg. Fee per Trade [$]": stats["Total Fees Paid"] / stats["Total Trades"],
         }
     )
+    # Add units to some column names
+    stats["Start Value [$]"] = stats.pop("Start Value")
+    stats["End Value [$]"] = stats.pop("End Value")
+    stats["Total Fees Paid [$]"] = stats.pop("Total Fees Paid")
     stats = pd.concat([stats, tmp]).reset_index()
     stats.rename(columns={stats.columns[-1]: name}, inplace=True)
     return stats
@@ -44,7 +49,25 @@ def display_stats(portfolios: List[vbt.Portfolio], portfolio_names: List[str]):
     df_stats = reduce(
         lambda left, right: pd.merge(left, right, on=["index"], how="outer"), stats
     ).set_index("index")
-    print(df_stats)
+    column_order = [
+        "Annualized Return [%]",
+        "Annualized Volatility [%]",
+        "Sharpe Ratio",
+        "Sortino Ratio",
+        "Max Drawdown [%]",
+        "Max Drawdown Duration",
+        "Max Gross Exposure [%]",
+        "Win Rate [%]",
+        "Start",
+        "End",
+        "Start Value [$]",
+        "End Value [$]",
+        "Total Return [%]",
+        "Total Trades",
+        "Total Fees Paid [$]",
+        "Avg. Fee per Trade [$]",
+    ]
+    print(df_stats.reindex(column_order))
 
 
 def plot_cumulative_returns(

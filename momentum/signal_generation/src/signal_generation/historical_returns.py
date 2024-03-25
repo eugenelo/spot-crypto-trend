@@ -1,0 +1,56 @@
+import pandas as pd
+import numpy as np
+
+from signal_generation.common import (
+    sort_dataframe,
+    returns,
+    log_returns,
+    ema,
+    volatility,
+    volatility_ema,
+    bins,
+)
+from signal_generation.constants import PRICE_COLUMN
+
+
+def create_historical_return_signals(
+    df_ohlc: pd.DataFrame, periods_per_day: int = 1
+) -> pd.DataFrame:
+    df = sort_dataframe(df_ohlc)
+
+    # Calculate returns
+    df["returns"] = returns(df, column=PRICE_COLUMN, periods=1)
+    df["log_returns"] = log_returns(df, column=PRICE_COLUMN, periods=1)
+
+    # Calculate EMAs.
+    for lookback_days in [8, 16, 32, 24, 48, 96]:
+        periods = lookback_days * periods_per_day
+        df[f"{lookback_days}d_ema"] = ema(df, column=PRICE_COLUMN, periods=periods)
+    # Calculate annualized volatility on returns
+    for lookback_days in [30, 365]:
+        periods = lookback_days * periods_per_day
+        df[f"returns_{lookback_days}d_vol"] = volatility_ema(
+            df, column="returns", periods=periods
+        ) * np.sqrt(365 / periods_per_day)
+
+    # Calculate rolling historical returns
+    for lookback_days in [15, 21, 30]:
+        # Returns
+        ret_colname = f"{lookback_days}d_returns"
+        periods = lookback_days * periods_per_day
+        df[ret_colname] = returns(df, column=PRICE_COLUMN, periods=periods)
+        # Log returns
+        logret_colname = f"{lookback_days}d_log_returns"
+        df[logret_colname] = log_returns(df, column=PRICE_COLUMN, periods=periods)
+        # Quintiles
+        decile_colname = f"{lookback_days}d_returns_decile"
+        df[decile_colname] = bins(df, column=ret_colname, num_bins=10)
+        decile_colname = f"{lookback_days}d_log_returns_decile"
+        df[decile_colname] = bins(df, column=logret_colname, num_bins=10)
+
+    # Add helper cols
+    df["day"] = pd.DatetimeIndex(df["timestamp"]).day
+    df["month"] = pd.DatetimeIndex(df["timestamp"]).month
+    df["year"] = pd.DatetimeIndex(df["timestamp"]).year
+
+    return df

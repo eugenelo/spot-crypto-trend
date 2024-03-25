@@ -1,5 +1,12 @@
+from enum import Enum
 import pandas as pd
 from typing import Optional, List
+
+
+class Direction(Enum):
+    LongOnly = "LongOnly"
+    ShortOnly = "ShortOnly"
+    Both = "Both"
 
 
 def nonempty_positions(

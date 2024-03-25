@@ -20,6 +20,13 @@ from vectorbt.portfolio.enums import (
     NoOrder,
 )
 
+from position_generation.constants import (
+    TIMESTAMP_COL,
+    TICKER_COL,
+    VOLUME_COL,
+    CLOSE_COL,
+    SCALED_POSITION_COL,
+)
 from position_generation.utils import nonempty_positions
 from position_generation.benchmark import generate_benchmark_btc
 from simulation.fees import compute_fees, FeeType
@@ -94,6 +101,17 @@ def order_func_nb(
     size_now = price_now * last_position  # [$]
     pct_now = size_now / account_size  # [% of Account Size]
 
+    # Check if position deviation exceeds buffer percentage.
+    position_deviation = np.abs(target_now - pct_now)  # [Percentage of Account Size]
+    rebalance = round(position_deviation, 4) > rebalancing_buffer
+    if not rebalance:
+        return NoOrder
+    # Rebalance to the edge of the buffer (not to the target), minimize trading.
+    if target_now > pct_now:
+        target_now -= rebalancing_buffer
+    else:
+        target_now += rebalancing_buffer
+
     # Translate target position into trade amount
     target_size = target_now * account_size  # [$]
     trade_size = target_size - size_now  # [$]
@@ -108,22 +126,27 @@ def order_func_nb(
         volume_now = 0
     max_position_amnt = volume_max_size * volume_now  # [Units of Asset]
     trade_amnt = clip_nb(trade_amnt, -max_position_amnt, max_position_amnt)
+    trade_size = trade_amnt * price_now  # [$]
+    trade_pct = trade_size / account_size  # [%]
 
-    # Check if position deviation exceeds buffer percentage. Use original target, not volume constrained.
-    position_deviation = np.abs(target_now - pct_now)  # [Percentage of Account Size]
-    rebalance = position_deviation >= rebalancing_buffer
-
-    # Calculate order sizes (to buffer or to target?)
-    order_amnt = trade_amnt if rebalance else 0
-    order_size = order_amnt * price_now  # [$]
+    # Get order size based on size type
+    order_size_type = nb.get_elem_nb(c, size_type)
+    if order_size_type == SizeType.Amount:
+        order_size = trade_amnt
+    elif order_size_type == SizeType.Value:
+        order_size = trade_size
+    elif order_size_type == SizeType.Percent:
+        order_size = trade_pct
+    else:
+        raise ValueError("Unsupported size type!")
 
     # Submit order
-    if order_amnt == 0:
+    if order_size == 0:
         return NoOrder
     return nb.order_nb(
-        size=order_amnt,
+        size=order_size,
         price=price_now,
-        size_type=nb.get_elem_nb(c, size_type),
+        size_type=order_size_type,
         direction=nb.get_elem_nb(c, direction),
         fees=nb.get_elem_nb(c, fees),
         fixed_fees=nb.get_elem_nb(c, fixed_fees),
@@ -203,30 +226,32 @@ def backtest(
 
     def apply_time_window(df):
         if start_date is not None:
-            df = df.loc[df["timestamp"] >= start_date]
+            df = df.loc[df[TIMESTAMP_COL] >= start_date]
         if end_date is not None:
-            df = df.loc[df["timestamp"] <= end_date]
+            df = df.loc[df[TIMESTAMP_COL] <= end_date]
         return df
 
     df_backtest = apply_time_window(df_backtest)
 
     # Transform data from long to wide
-    df_backtest = df_backtest.sort_values(["timestamp", "ticker"])
-    price = df_backtest[["timestamp", "ticker", "close"]]
-    price = pd.pivot_table(price, index="timestamp", columns="ticker", values="close")
-    volume = df_backtest[["timestamp", "ticker", "volume"]]
+    df_backtest = df_backtest.sort_values([TIMESTAMP_COL, TICKER_COL])
+    price = df_backtest[[TIMESTAMP_COL, TICKER_COL, CLOSE_COL]]
+    price = pd.pivot_table(
+        price, index=TIMESTAMP_COL, columns=TICKER_COL, values=CLOSE_COL
+    )
+    volume = df_backtest[[TIMESTAMP_COL, TICKER_COL, VOLUME_COL]]
     volume = pd.pivot_table(
-        volume, index="timestamp", columns="ticker", values="volume"
+        volume, index=TIMESTAMP_COL, columns=TICKER_COL, values=VOLUME_COL
     )
     # Save original price index for computing daily volume later
     orig_price_index = price.index.copy()
     # Create positions for daily rebalancing
-    positions = df_backtest[["timestamp", "ticker", "scaled_position"]]
+    positions = df_backtest[[TIMESTAMP_COL, TICKER_COL, SCALED_POSITION_COL]]
     positions = pd.pivot_table(
         positions,
-        index="timestamp",
-        columns="ticker",
-        values="scaled_position",
+        index=TIMESTAMP_COL,
+        columns=TICKER_COL,
+        values=SCALED_POSITION_COL,
         dropna=False,
         fill_value=0.0,
     )
@@ -272,9 +297,11 @@ def backtest(
     if verbose:
         # Plot rolling 30d volume
         tmp_for_plot = rolling_30d_trade_volume.reset_index()
-        fig = px.line(tmp_for_plot, x="timestamp", y="Size", title="30d Rolling Volume")
+        fig = px.line(
+            tmp_for_plot, x=TIMESTAMP_COL, y="Size", title="30d Rolling Volume"
+        )
         fig.update_layout(
-            xaxis_title="Timestamp", yaxis_title="30d Rolling Volume", hovermode="x"
+            xaxis_title=TIMESTAMP_COL, yaxis_title="30d Rolling Volume", hovermode="x"
         )
         fig.show()
 
@@ -283,9 +310,9 @@ def backtest(
     if verbose:
         # Plot daily fees [%]
         tmp_for_plot = dynamic_fees.reset_index()
-        fig = px.line(tmp_for_plot, x="timestamp", y="Size", title="Daily Fees [%]")
+        fig = px.line(tmp_for_plot, x=TIMESTAMP_COL, y="Size", title="Daily Fees [%]")
         fig.update_layout(
-            xaxis_title="Timestamp", yaxis_title="Daily Fees (%)", hovermode="x"
+            xaxis_title=TIMESTAMP_COL, yaxis_title="Daily Fees (%)", hovermode="x"
         )
         fig.show()
 
@@ -320,9 +347,11 @@ def backtest(
         # Plot returns
         df_returns = portfolio_with_fees.returns().reset_index()
         df_returns.rename(columns={"group": "Returns"}, inplace=True)
-        fig = px.bar(df_returns, x="timestamp", y="Returns", title="Daily Returns [%]")
+        fig = px.bar(
+            df_returns, x=TIMESTAMP_COL, y="Returns", title="Daily Returns [%]"
+        )
         fig.update_layout(
-            xaxis_title="Timestamp", yaxis_title="Returns [%]", hovermode="x"
+            xaxis_title=TIMESTAMP_COL, yaxis_title="Returns [%]", hovermode="x"
         )
         fig.show()
         print()

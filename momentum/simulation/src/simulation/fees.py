@@ -52,8 +52,8 @@ def kraken_taker_fees(rolling_30d_volume: float):
 
 
 class FeeType(Enum):
-    MAKER = 1
-    TAKER = 2
+    MAKER = "MAKER"
+    TAKER = "TAKER"
 
 
 def compute_fees(rolling_30d_volume: pd.Series, fee_type: FeeType):

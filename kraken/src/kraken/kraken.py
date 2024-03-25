@@ -19,6 +19,7 @@ from position_generation.utils import (
     nonempty_positions,
 )
 from signal_generation.signal_generation import create_trading_signals
+from signal_generation.constants import SignalType
 from core.utils import filter_universe
 from core.constants import (
     in_universe_excl_stablecoins,
@@ -331,10 +332,14 @@ def main(args):
     elif args.mode == "positions":
         if args.output_data_freq in ("1h"):
             # Special case, generate signals directly from 30 days of hourly data. Ignore timezone.
-            df_signals = create_trading_signals(df_ohlc, periods_per_day=24)
+            df_signals = create_trading_signals(
+                df_ohlc, periods_per_day=24, signal_type=SignalType.HistoricalReturns
+            )
         else:
             # Standard path
-            df_signals = create_trading_signals(df_ohlc, periods_per_day=1)
+            df_signals = create_trading_signals(
+                df_ohlc, periods_per_day=1, signal_type=SignalType.HistoricalReturns
+            )
         df_nonempty_positions = get_positions(
             kraken, df_signals, account_size=args.account_size
         )

@@ -127,7 +127,7 @@ class TestBacktestSingleAsset(unittest.TestCase):
         rebalancing_buffer = 0.4
         size = pd.DataFrame.from_dict(
             {
-                "A": [0.1, 0.2, 0.3, 0.5, 0.0],
+                "A": [0.1, 0.2, 0.3, 0.9, -0.4],
             }
         )
         size.index = close.index
@@ -146,7 +146,9 @@ class TestBacktestSingleAsset(unittest.TestCase):
         )
         self.assertEqual(1, entry_trades.shape[0])
         self.assertAlmostEqual(
-            initial_capital * size["A"].iloc[3] / close["A"].iloc[3],
+            (size["A"].iloc[3] - rebalancing_buffer)
+            * initial_capital
+            / close["A"].iloc[3],
             entry_trades["Size"].iloc[0],
         )
         self.assertEqual("Closed", entry_trades["Status"].iloc[0])
@@ -192,7 +194,7 @@ class TestBacktestMultiAsset(unittest.TestCase):
         # Buy at start, hold position
         initial_capital = 100.0
         volume_max_size = 1.0
-        rebalancing_buffer = 0.01
+        rebalancing_buffer = 0.0
         # fmt: off
         size = pd.DataFrame.from_dict(
             {
@@ -244,7 +246,7 @@ class TestBacktestMultiAsset(unittest.TestCase):
         # Buy at start, hold position
         initial_capital = 100.0
         volume_max_size = 0.01
-        rebalancing_buffer = 0.01
+        rebalancing_buffer = 0.0
         # fmt: off
         size = pd.DataFrame.from_dict(
             {
@@ -283,14 +285,14 @@ class TestBacktestMultiAsset(unittest.TestCase):
             if i == 1:
                 self.assertAlmostEqual(1.0, entry_trades["Size"].iloc[i])
             else:
-                self.assertAlmostEqual(77.52, entry_trades["Size"].iloc[i])
+                self.assertAlmostEqual(77.52, entry_trades["Size"].iloc[i], places=2)
         # Traded C on first 2 days
         for i in (2, 3):
             self.assertEqual("C", entry_trades["Column"].iloc[i])
             if i == 2:
                 self.assertAlmostEqual(1.0, entry_trades["Size"].iloc[i])
             else:
-                self.assertAlmostEqual(19.4, entry_trades["Size"].iloc[i])
+                self.assertAlmostEqual(19.4, entry_trades["Size"].iloc[i], places=2)
         # # Exit Trades
         exit_trades = pf.exit_trades.records_readable.sort_values(by="Exit Timestamp")
         exit_trades = exit_trades.loc[exit_trades["Status"] == "Closed"]
@@ -353,7 +355,9 @@ class TestBacktestMultiAsset(unittest.TestCase):
         # Traded A on second day
         self.assertEqual("A", entry_trades["Column"].iloc[0])
         self.assertAlmostEqual(
-            size["A"].iloc[1] * initial_capital / close["A"].iloc[1],
+            (size["A"].iloc[1] - rebalancing_buffer)
+            * initial_capital
+            / close["A"].iloc[1],
             entry_trades["Size"].iloc[0],
         )
         self.assertEqual(
@@ -363,7 +367,9 @@ class TestBacktestMultiAsset(unittest.TestCase):
         # Traded B on last day
         self.assertEqual("B", entry_trades["Column"].iloc[1])
         self.assertAlmostEqual(
-            size["B"].iloc[4] * initial_capital / close["B"].iloc[4],
+            (size["B"].iloc[4] - rebalancing_buffer)
+            * initial_capital
+            / close["B"].iloc[4],
             entry_trades["Size"].iloc[1],
         )
         self.assertEqual(
@@ -373,7 +379,9 @@ class TestBacktestMultiAsset(unittest.TestCase):
         # Traded C on last day
         self.assertEqual("C", entry_trades["Column"].iloc[2])
         self.assertAlmostEqual(
-            size["C"].iloc[4] * initial_capital / close["C"].iloc[4],
+            (size["C"].iloc[4] - rebalancing_buffer)
+            * initial_capital
+            / close["C"].iloc[4],
             entry_trades["Size"].iloc[2],
         )
         self.assertEqual(
@@ -385,7 +393,7 @@ class TestBacktestMultiAsset(unittest.TestCase):
         exit_trades = exit_trades.loc[exit_trades["Status"] == "Closed"]
         self.assertEqual(0, exit_trades.shape[0])
         # Cash
-        expected_cash = pd.Series([100, 65, 65, 65, 0])
+        expected_cash = pd.Series([100, 95, 95, 95, 90])
         self.assertTrue(np.allclose(expected_cash, pf.cash()))
         # Portfolio Value
         self.assertAlmostEqual(initial_capital, pf.final_value())

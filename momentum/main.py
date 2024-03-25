@@ -13,16 +13,17 @@ from analysis.analysis import analysis
 from simulation.simulation import simulation
 from simulation.utils import rebal_freq_supported
 from simulation.backtest import backtest_crypto
-from simulation.optimize import optimize_crypto
+from simulation.optimize import optimize_crypto, optimize_rebalancing_buffer
 from signal_generation.signal_generation import (
     create_analysis_signals,
     create_trading_signals,
 )
+from signal_generation.constants import SignalType
 from simulation.constants import DEFAULT_VOLUME_MAX_SIZE, DEFAULT_REBALANCING_BUFFER
 from position_generation.benchmark import generate_benchmark_btc
-from position_generation.utils import nonempty_positions
+from position_generation.utils import nonempty_positions, Direction
 from position_generation.v1 import generate_positions_v1
-from position_generation.rohrbach import generate_positions_rohrbach
+from position_generation.generate_positions import generate_positions
 from data.utils import load_ohlc_to_hourly_filtered, load_ohlc_to_daily_filtered
 from core.utils import get_periods_per_day
 from core.constants import (
@@ -68,20 +69,48 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_generate_positions(params: dict) -> Callable:
+def get_signal_type(params: dict) -> SignalType:
+    if params["generate_positions"] == "v1":
+        return SignalType.HistoricalReturns
+    elif params["generate_positions"] == "rohrbach":
+        return SignalType.Rohrbach
+    raise ValueError(
+        f"Unsupported 'generate_positions' argument: {params['generate_positions']}"
+    )
+
+
+def get_generate_positions(params: dict, periods_per_day: int) -> Callable:
     if params["generate_positions"] == "v1":
         v1_params = params["params"]
-        generate_positions = lambda df: generate_positions_v1(df, params=v1_params)
+        generate_positions_fn = lambda df: generate_positions_v1(df, params=v1_params)
     elif params["generate_positions"] == "rohrbach":
         rohrbach_params = params["params"]
-        generate_positions = lambda df: generate_positions_rohrbach(
-            df, params=rohrbach_params
+        if rohrbach_params["response_fn"] == "exponential":
+            signal = "trend_signal"
+        elif rohrbach_params["response_fn"] == "sigmoid":
+            signal = "trend_signal_sigmoid"
+        else:
+            raise ValueError("Invalid response_fn")
+        direction = Direction(params["direction"])
+        vol_target = params.get("vol_target", None)
+        cross_sectional_percentage = params.get("cross_sectional_percentage", None)
+        min_daily_volume = params.get("min_daily_volume", None)
+        max_daily_volume = params.get("max_daily_volume", None)
+        generate_positions_fn = lambda df: generate_positions(
+            df,
+            signal=signal,
+            periods_per_day=periods_per_day,
+            direction=direction,
+            vol_target=vol_target,
+            cross_sectional_percentage=cross_sectional_percentage,
+            min_daily_volume=min_daily_volume,
+            max_daily_volume=max_daily_volume,
         )
     else:
         raise ValueError(
             f"Unsupported 'generate_positions' argument: {params['generate_positions']}"
         )
-    return generate_positions
+    return generate_positions_fn
 
 
 def get_generate_benchmark(params: dict) -> Callable:
@@ -123,22 +152,6 @@ if __name__ == "__main__":
         ]["timestamp"]
     )
 
-    # Create signals
-    if args.mode == "analysis" or args.mode == "simulation":
-        df_analysis = create_analysis_signals(df_ohlc)
-    else:
-        df_analysis = create_trading_signals(df_ohlc)
-
-    # Validate dates
-    data_start = df_analysis["timestamp"].min()
-    if start_date < data_start:
-        print(f"Input start_date is before start of data! Setting to {data_start}")
-        start_date = data_start
-    data_end = df_analysis["timestamp"].max()
-    if end_date > data_end:
-        print(f"Input end_date is after end of data! Setting to {data_end}")
-        end_date = data_end
-
     # Load params
     params = {}
     if args.params_path is not None:
@@ -150,8 +163,28 @@ if __name__ == "__main__":
     assert (
         "generate_positions" in params and "generate_benchmark" in params
     ), "Position/Benchmark Generation functions should be specified in params!"
-    generate_positions = get_generate_positions(params)
-    generate_benchmark = get_generate_benchmark(params)
+    generate_positions_fn = get_generate_positions(params, periods_per_day)
+    generate_benchmark_fn = get_generate_benchmark(params)
+
+    # Create signals
+    if args.mode == "analysis" or args.mode == "simulation":
+        df_analysis = create_analysis_signals(df_ohlc, periods_per_day=periods_per_day)
+    else:
+        df_analysis = create_trading_signals(
+            df_ohlc,
+            periods_per_day=periods_per_day,
+            signal_type=get_signal_type(params),
+        )
+
+    # Validate dates
+    data_start = df_analysis["timestamp"].min()
+    if start_date < data_start:
+        print(f"Input start_date is before start of data! Setting to {data_start}")
+        start_date = data_start
+    data_end = df_analysis["timestamp"].max()
+    if end_date > data_end:
+        print(f"Input end_date is after end of data! Setting to {data_end}")
+        end_date = data_end
 
     # Set input args
     rebalancing_freq = args.rebalancing_freq
@@ -190,8 +223,8 @@ if __name__ == "__main__":
         backtest_crypto(
             df_analysis,
             periods_per_day=periods_per_day,
-            generate_positions=generate_positions,
-            generate_benchmark=generate_benchmark,
+            generate_positions=generate_positions_fn,
+            generate_benchmark=generate_benchmark_fn,
             start_date=start_date,
             end_date=end_date,
             rebalancing_freq=rebalancing_freq,
@@ -201,16 +234,19 @@ if __name__ == "__main__":
             skip_plots=args.skip_plots,
         )
     elif args.mode == "optimize":
-        optimize_crypto(
+        optimize_rebalancing_buffer(
             df_analysis,
             periods_per_day=periods_per_day,
+            generate_positions=generate_positions_fn,
             start_date=start_date,
             end_date=end_date,
             initial_capital=args.initial_capital,
-            skip_subsample_plots=args.skip_plots,
+            rebalancing_freq=rebalancing_freq,
+            volume_max_size=volume_max_size,
+            skip_plots=args.skip_plots,
         )
     elif args.mode == "positions":
-        positions = generate_positions(df_analysis)
+        positions = generate_positions_fn(df_analysis)
         nonempty_positions = nonempty_positions(positions, timestamp=end_date)
         print(nonempty_positions)
         # Output to file
