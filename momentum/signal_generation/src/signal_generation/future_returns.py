@@ -6,7 +6,7 @@ from signal_generation.common import (
     future_returns,
     future_log_returns,
 )
-from signal_generation.constants import PRICE_COLUMN
+from core.constants import PRICE_COL_SIGNAL_GEN
 
 
 def create_future_return_signals(
@@ -19,9 +19,11 @@ def create_future_return_signals(
         periods = lookahead_days * periods_per_day
         # Simple returns
         colname = f"next_{lookahead_days}d_returns"
-        df[colname] = future_returns(df, column=PRICE_COLUMN, periods=periods)
+        df[colname] = future_returns(df, column=PRICE_COL_SIGNAL_GEN, periods=periods)
         # Log returns
         colname = f"next_{lookahead_days}d_log_returns"
-        df[colname] = future_log_returns(df, column=PRICE_COLUMN, periods=periods)
+        df[colname] = future_log_returns(
+            df, column=PRICE_COL_SIGNAL_GEN, periods=periods
+        )
 
     return df

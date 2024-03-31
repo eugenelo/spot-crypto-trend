@@ -58,5 +58,5 @@ class FeeType(Enum):
 
 def compute_fees(rolling_30d_volume: pd.Series, fee_type: FeeType):
     fee_fn = kraken_maker_fees if fee_type == FeeType.MAKER else kraken_taker_fees
-    fees = rolling_30d_volume.apply(fee_fn)
+    fees = rolling_30d_volume.apply(fee_fn).rename("Fees [%]")
     return fees

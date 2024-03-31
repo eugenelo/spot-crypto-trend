@@ -4,6 +4,7 @@ import numpy as np
 from datetime import timedelta
 
 import vectorbt as vbt
+from vectorbt.portfolio.enums import Direction
 
 from simulation.backtest import simulate
 
@@ -252,7 +253,7 @@ class TestBacktestMultiAsset(unittest.TestCase):
             {
                 "A": [0.2, 0, 0, 0, 0],
                 "B": [0.5, 0, 0, 0, 1.0],
-                "C": [0.4, 0.4, 0.571428, 0.727272, 0],
+                "C": [0.4, 0.4, 81.6/142.8, 163.2/224.4, 0],
             }
         )
         # fmt: on
@@ -350,7 +351,6 @@ class TestBacktestMultiAsset(unittest.TestCase):
         entry_trades = pf.entry_trades.records_readable.sort_values(
             by="Entry Timestamp"
         )
-        print(entry_trades)
         self.assertEqual(3, entry_trades.shape[0])
         # Traded A on second day
         self.assertEqual("A", entry_trades["Column"].iloc[0])
@@ -397,6 +397,71 @@ class TestBacktestMultiAsset(unittest.TestCase):
         self.assertTrue(np.allclose(expected_cash, pf.cash()))
         # Portfolio Value
         self.assertAlmostEqual(initial_capital, pf.final_value())
+
+    def test_simulate_direction(self):
+        close, start_date = self.setup()
+        volume = pd.DataFrame.from_dict(
+            {
+                "A": [np.inf] * 5,
+                "B": [np.inf] * 5,
+                "C": [np.inf] * 5,
+            }
+        )
+        volume.index = close.index
+
+        # Buy at start, hold position
+        initial_capital = 100.0
+        volume_max_size = 1.0
+        rebalancing_buffer = 0.0
+        # fmt: off
+        size = pd.DataFrame.from_dict(
+            {
+                "A": [1/3, 1/5, 1/8, 1/13, 1/22],
+                "B": [1/3, 2/5, 3/8, 4/13, 5/22],
+                "C": [1/3, 2/5, 4/8, 8/13, 16/22],
+            }
+        )
+        # fmt: on
+        size.index = close.index
+        pf_long_only = simulate(
+            price=close,
+            positions=size,
+            volume=volume,
+            volume_max_size=volume_max_size,
+            rebalancing_buffer=rebalancing_buffer,
+            initial_capital=initial_capital,
+            direction=Direction.LongOnly,
+        )
+        pf_both = simulate(
+            price=close,
+            positions=size,
+            volume=volume,
+            volume_max_size=volume_max_size,
+            rebalancing_buffer=rebalancing_buffer,
+            initial_capital=initial_capital,
+            direction=Direction.Both,
+        )
+
+        # Entry Trades
+        lo_entry_trades = pf_long_only.entry_trades.records_readable.sort_values(
+            by="Entry Timestamp"
+        )
+        b_entry_trades = pf_both.entry_trades.records_readable.sort_values(
+            by="Entry Timestamp"
+        )
+        self.assertTrue(b_entry_trades.equals(lo_entry_trades))
+        # Exit Trades
+        lo_exit_trades = pf_long_only.exit_trades.records_readable.sort_values(
+            by="Exit Timestamp"
+        )
+        lo_exit_trades = lo_exit_trades.loc[lo_exit_trades["Status"] == "Closed"]
+        b_exit_trades = pf_both.exit_trades.records_readable.sort_values(
+            by="Exit Timestamp"
+        )
+        b_exit_trades = b_exit_trades.loc[b_exit_trades["Status"] == "Closed"]
+        self.assertTrue(b_exit_trades.equals(lo_exit_trades))
+        # Portfolio Value
+        self.assertAlmostEqual(pf_both.final_value(), pf_long_only.final_value())
 
 
 if __name__ == "__main__":

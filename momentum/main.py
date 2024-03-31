@@ -26,11 +26,7 @@ from position_generation.v1 import generate_positions_v1
 from position_generation.generate_positions import generate_positions
 from data.utils import load_ohlc_to_hourly_filtered, load_ohlc_to_daily_filtered
 from core.utils import get_periods_per_day
-from core.constants import (
-    in_universe_excl_stablecoins,
-    in_shitcoin_trending_universe,
-    in_mature_trending_universe,
-)
+from core.constants import in_universe_excl_stablecoins
 
 
 def parse_args():
@@ -94,6 +90,7 @@ def get_generate_positions(params: dict, periods_per_day: int) -> Callable:
         direction = Direction(params["direction"])
         vol_target = params.get("vol_target", None)
         cross_sectional_percentage = params.get("cross_sectional_percentage", None)
+        cross_sectional_equal_weight = params.get("cross_sectional_equal_weight", False)
         min_daily_volume = params.get("min_daily_volume", None)
         max_daily_volume = params.get("max_daily_volume", None)
         generate_positions_fn = lambda df: generate_positions(
@@ -103,6 +100,7 @@ def get_generate_positions(params: dict, periods_per_day: int) -> Callable:
             direction=direction,
             vol_target=vol_target,
             cross_sectional_percentage=cross_sectional_percentage,
+            cross_sectional_equal_weight=cross_sectional_equal_weight,
             min_daily_volume=min_daily_volume,
             max_daily_volume=max_daily_volume,
         )
@@ -243,6 +241,7 @@ if __name__ == "__main__":
             initial_capital=args.initial_capital,
             rebalancing_freq=rebalancing_freq,
             volume_max_size=volume_max_size,
+            vol_target=params.get("vol_target", None),
             skip_plots=args.skip_plots,
         )
     elif args.mode == "positions":

@@ -20,18 +20,29 @@ from vectorbt.portfolio.enums import (
     NoOrder,
 )
 
-from position_generation.constants import (
+from core.constants import (
     TIMESTAMP_COL,
     TICKER_COL,
     VOLUME_COL,
-    CLOSE_COL,
-    SCALED_POSITION_COL,
+    PRICE_COL_BACKTEST,
+    POSITION_COL,
+)
+from position_generation.constants import (
+    NUM_LONG_ASSETS_COL,
+    NUM_SHORT_ASSETS_COL,
+    NUM_UNIQUE_ASSETS_COL,
+    NUM_OPEN_LONG_POSITIONS_COL,
+    NUM_OPEN_SHORT_POSITIONS_COL,
+    NUM_OPEN_POSITIONS_COL,
 )
 from position_generation.utils import nonempty_positions
 from position_generation.benchmark import generate_benchmark_btc
 from simulation.fees import compute_fees, FeeType
 from simulation.stats import (
     get_stats_of_interest,
+    get_turnover,
+    get_trade_volume,
+    get_num_open_positions,
     display_stats,
     plot_cumulative_returns,
     plot_rolling_returns,
@@ -103,7 +114,7 @@ def order_func_nb(
 
     # Check if position deviation exceeds buffer percentage.
     position_deviation = np.abs(target_now - pct_now)  # [Percentage of Account Size]
-    rebalance = round(position_deviation, 4) > rebalancing_buffer
+    rebalance = position_deviation > rebalancing_buffer
     if not rebalance:
         return NoOrder
     # Rebalance to the edge of the buffer (not to the target), minimize trading.
@@ -235,23 +246,33 @@ def backtest(
 
     # Transform data from long to wide
     df_backtest = df_backtest.sort_values([TIMESTAMP_COL, TICKER_COL])
-    price = df_backtest[[TIMESTAMP_COL, TICKER_COL, CLOSE_COL]]
+    price = df_backtest[[TIMESTAMP_COL, TICKER_COL, PRICE_COL_BACKTEST]]
     price = pd.pivot_table(
-        price, index=TIMESTAMP_COL, columns=TICKER_COL, values=CLOSE_COL
+        price,
+        index=TIMESTAMP_COL,
+        columns=TICKER_COL,
+        values=PRICE_COL_BACKTEST,
+        dropna=False,
+        fill_value=0.0,
     )
     volume = df_backtest[[TIMESTAMP_COL, TICKER_COL, VOLUME_COL]]
     volume = pd.pivot_table(
-        volume, index=TIMESTAMP_COL, columns=TICKER_COL, values=VOLUME_COL
+        volume,
+        index=TIMESTAMP_COL,
+        columns=TICKER_COL,
+        values=VOLUME_COL,
+        dropna=False,
+        fill_value=0.0,
     )
     # Save original price index for computing daily volume later
     orig_price_index = price.index.copy()
     # Create positions for daily rebalancing
-    positions = df_backtest[[TIMESTAMP_COL, TICKER_COL, SCALED_POSITION_COL]]
+    positions = df_backtest[[TIMESTAMP_COL, TICKER_COL, POSITION_COL]]
     positions = pd.pivot_table(
         positions,
         index=TIMESTAMP_COL,
         columns=TICKER_COL,
-        values=SCALED_POSITION_COL,
+        values=POSITION_COL,
         dropna=False,
         fill_value=0.0,
     )
@@ -270,22 +291,21 @@ def backtest(
         rebalancing_buffer=rebalancing_buffer,
         initial_capital=initial_capital,
         segment_mask=segment_mask,
-        direction=Direction.LongOnly,
+        direction=Direction.Both,
         fees=0,
+        fixed_fees = 0,
+        slippage=0.005,
     )
     # fmt: on
     if verbose:
         print("--- Before Fees ---")
         print(portfolio_no_fees.stats())
-        portfolio_no_fees.plot_cum_returns().show()
         print()
     if not with_fees:
         return portfolio_no_fees
 
     # Calculate 30d rolling trading volume
-    trade_volume_per_period = portfolio_no_fees.trades.records_readable.groupby(
-        portfolio_no_fees.trades.records_readable["Entry Timestamp"]
-    )["Size"].sum()
+    trade_volume_per_period = get_trade_volume(portfolio_no_fees)
     # Reindex back to price index, fill in gaps where no trades were placed
     trade_volume_per_period = trade_volume_per_period.reindex(
         orig_price_index, fill_value=0
@@ -298,7 +318,10 @@ def backtest(
         # Plot rolling 30d volume
         tmp_for_plot = rolling_30d_trade_volume.reset_index()
         fig = px.line(
-            tmp_for_plot, x=TIMESTAMP_COL, y="Size", title="30d Rolling Volume"
+            tmp_for_plot,
+            x=TIMESTAMP_COL,
+            y="Traded Size [$]",
+            title="30d Rolling Volume",
         )
         fig.update_layout(
             xaxis_title=TIMESTAMP_COL, yaxis_title="30d Rolling Volume", hovermode="x"
@@ -310,7 +333,9 @@ def backtest(
     if verbose:
         # Plot daily fees [%]
         tmp_for_plot = dynamic_fees.reset_index()
-        fig = px.line(tmp_for_plot, x=TIMESTAMP_COL, y="Size", title="Daily Fees [%]")
+        fig = px.line(
+            tmp_for_plot, x=TIMESTAMP_COL, y="Fees [%]", title="Daily Fees [%]"
+        )
         fig.update_layout(
             xaxis_title=TIMESTAMP_COL, yaxis_title="Daily Fees (%)", hovermode="x"
         )
@@ -326,23 +351,18 @@ def backtest(
         rebalancing_buffer=rebalancing_buffer,
         initial_capital=initial_capital,
         segment_mask=segment_mask,
-        direction=Direction.LongOnly,
+        direction=Direction.Both,
         fees=dynamic_fees,
+        fixed_fees=0,
+        slippage=0.005,
     )
 
     if verbose:
         print("--- After Fees ---")
         print(portfolio_with_fees.stats())
-        portfolio_with_fees.plot_cum_returns().show()
         portfolio_with_fees.plot_drawdowns().show()
         portfolio_with_fees.plot_net_exposure().show()
-        # print(
-        #     portfolio_with_fees.entry_trades.records_readable.sort_values(
-        #         by="Entry Timestamp"
-        #     ).head(10)
-        # )
-        # # portfolio_with_fees.plot_value().show()
-        # # portfolio_with_fees.plot_trades().show()
+        print()
 
         # Plot returns
         df_returns = portfolio_with_fees.returns().reset_index()
@@ -354,7 +374,55 @@ def backtest(
             xaxis_title=TIMESTAMP_COL, yaxis_title="Returns [%]", hovermode="x"
         )
         fig.show()
-        print()
+
+        # Plot turnover
+        df_turnover = get_turnover(portfolio_with_fees).reset_index()
+        turnover_col = "Turnover [%]"
+        turnover_30d_ema_col = "Turnover 30d EMA [%]"
+        df_turnover[turnover_30d_ema_col] = (
+            df_turnover[turnover_col]
+            .ewm(span=30 * periods_per_day, adjust=True, ignore_na=False)
+            .mean()
+        )
+        fig = px.line(
+            df_turnover,
+            x=TIMESTAMP_COL,
+            y=[turnover_col, turnover_30d_ema_col],
+            title="Turnover",
+        )
+        fig.show()
+
+        # Plot open positions
+        df_tmp = get_num_open_positions(df_backtest)
+        df_tmp = (
+            get_num_open_positions(df_backtest)
+            .groupby([TIMESTAMP_COL])
+            .agg(
+                {
+                    NUM_LONG_ASSETS_COL: "max",
+                    NUM_SHORT_ASSETS_COL: "max",
+                    NUM_UNIQUE_ASSETS_COL: "max",
+                    NUM_OPEN_LONG_POSITIONS_COL: "max",
+                    NUM_OPEN_SHORT_POSITIONS_COL: "max",
+                    NUM_OPEN_POSITIONS_COL: "max",
+                }
+            )
+            .reset_index()
+        )
+        fig = px.line(
+            df_tmp,
+            x=TIMESTAMP_COL,
+            y=[
+                NUM_LONG_ASSETS_COL,
+                NUM_SHORT_ASSETS_COL,
+                NUM_UNIQUE_ASSETS_COL,
+                NUM_OPEN_LONG_POSITIONS_COL,
+                NUM_OPEN_SHORT_POSITIONS_COL,
+                NUM_OPEN_POSITIONS_COL,
+            ],
+            title="Num Open Positions",
+        )
+        fig.show()
 
     return portfolio_with_fees
 

@@ -1,7 +1,7 @@
 import pandas as pd
 
 from signal_generation.common import sort_dataframe
-from signal_generation.constants import PRICE_COLUMN, SignalType
+from signal_generation.constants import SignalType
 from signal_generation.historical_returns import create_historical_return_signals
 from signal_generation.future_returns import create_future_return_signals
 from signal_generation.rohrbach import create_rohrbach_signals

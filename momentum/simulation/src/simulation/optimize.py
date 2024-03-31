@@ -426,6 +426,7 @@ def optimize_rebalancing_buffer(
     initial_capital: int,
     rebalancing_freq: Optional[str],
     volume_max_size: float,
+    vol_target: Optional[float],
     skip_plots: bool,
 ):
     # Generate positions
@@ -433,8 +434,8 @@ def optimize_rebalancing_buffer(
 
     # Optimize value of rebalancing buffer which yields highest net sharpe
     rebal_buffer_to_pf = {}
-    step_size = 0.001
-    num_steps = 50
+    step_size = 0.0005
+    num_steps = 200
     for i in range(num_steps):
         rebalancing_buffer = i * step_size
         pf_portfolio = backtest(
@@ -451,13 +452,19 @@ def optimize_rebalancing_buffer(
         )
         rebal_buffer_to_pf[rebalancing_buffer] = pf_portfolio
 
-    # Print stats
+    # Get stats per portfolio
     stats = []
     portfolios = []
     pf_names = []
     for rebalancing_buffer, pf in rebal_buffer_to_pf.items():
+        if vol_target is not None:
+            # Disqualify buffers which are too large, exceeding volatility target
+            realized_vol = pf.annualized_volatility()
+            if abs(realized_vol - vol_target) / vol_target > 0.25:
+                continue
         pf_name = f"Rebal Buffer {rebalancing_buffer * 100:.4f}%"
-        stats.append(get_stats_of_interest(pf, name=pf_name))
+        pf_stats = get_stats_of_interest(pf, name=pf_name)
+        stats.append(pf_stats)
         portfolios.append(pf)
         pf_names.append(pf_name)
     df_stats = reduce(
@@ -465,6 +472,7 @@ def optimize_rebalancing_buffer(
         stats,
     ).set_index("index")
     df_stats = df_stats.T
+
     comparison_metric = "Sharpe Ratio"
     print(
         df_stats.sort_values(by=[comparison_metric], ascending=[False])[
@@ -476,8 +484,9 @@ def optimize_rebalancing_buffer(
                 "Max Drawdown [%]",
                 "Annualized Return [%]",
                 "Annualized Volatility [%]",
+                "Avg Daily Turnover [%]",
             ]
-        ]
+        ].head(25)
     )
     print()
 

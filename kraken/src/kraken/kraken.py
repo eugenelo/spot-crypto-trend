@@ -21,11 +21,7 @@ from position_generation.utils import (
 from signal_generation.signal_generation import create_trading_signals
 from signal_generation.constants import SignalType
 from core.utils import filter_universe
-from core.constants import (
-    in_universe_excl_stablecoins,
-    in_shitcoin_trending_universe,
-    in_mature_trending_universe,
-)
+from core.constants import in_universe_excl_stablecoins
 
 
 def parse_args():

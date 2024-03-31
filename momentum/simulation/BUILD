@@ -7,6 +7,7 @@ py_library(
     deps = [
         requirement("vectorbt"),
         "//momentum/position_generation:position_generation",
+        "//momentum/core:core",
         "//momentum/core:core_nb",
     ],
     visibility = ["//visibility:public"]

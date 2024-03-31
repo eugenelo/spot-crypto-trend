@@ -215,6 +215,5 @@ def cross_sectional_abs_ema(
 def apply_mask(
     df: pd.DataFrame, target_column: str, mask, fill_value=np.nan
 ) -> pd.DataFrame:
-    df = df.copy()
     df.loc[mask, target_column] = fill_value
     return df

@@ -1,0 +1,33 @@
+generate_positions: rohrbach
+generate_benchmark: btc
+rebalancing_freq: null
+volume_max_size: 0.01
+rebalancing_buffer: 0.002
+vol_target: 0.35  # 35% annualized
+cross_sectional_percentage: 0.3  # Keep top/bottom 30% of universe
+direction: LongOnly
+min_daily_volume: 10000  # Minimum avg daily volume [USD]
+max_daily_volume: null  # Maximum avg daily volume [USD]
+
+params:
+  response_fn: exponential
+
+# ema_window_pairs = [(4, 12), (8, 24), (16, 48), (32, 96), (64, 192)]
+#                                            Benchmark                pf_Strategy
+# index
+# Annualized Return [%]                          53.44                      41.67
+# Annualized Volatility [%]                      64.29                      35.82
+# Sharpe Ratio                                    0.99                       1.15
+# Sortino Ratio                                   1.46                       1.66
+# Max Drawdown [%]                               76.23                      55.98
+# Max Drawdown Duration              783 days 00:00:00          783 days 00:00:00
+# Max Gross Exposure [%]                         99.16                      100.0
+# Win Rate [%]                                     NaN                      37.88
+# Start                      2020-01-01 00:00:00-05:00  2020-01-01 00:00:00-05:00
+# End                        2023-12-31 00:00:00-05:00  2023-12-31 00:00:00-05:00
+# Start Value [$]                              10000.0                    10000.0
+# End Value [$]                               55497.37                   40315.27
+# Total Return [%]                              454.97                     303.15
+# Total Trades                                       1                      11974
+# Total Fees Paid [$]                            36.87                    5855.43
+# Avg. Fee per Trade [$]                         36.87                       0.49
