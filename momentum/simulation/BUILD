@@ -2,22 +2,53 @@ load("@pip_deps//:requirements.bzl", "requirement")
 
 py_library(
     name = "simulation",
-    srcs = glob(["src/**/*.py"]),
-    imports = ["src"],
+    srcs = glob(["src/simulation/*.py"]),
     deps = [
-        requirement("vectorbt"),
+        ":vbt",
         "//momentum/position_generation:position_generation",
         "//momentum/core:core",
-        "//momentum/core:core_nb",
     ],
     visibility = ["//visibility:public"]
 )
 
-py_test(
-    name="test_backtest",
-    srcs = ["test/test_backtest.py"],
+# Use vbtpro
+py_library(
+    name="vbt",
+    srcs = glob(["src/simulation/vbt/*.py"]),
+    imports = ["src"],
     deps = [
-        ":simulation"
+        ":simulation_vbtpro",
+    ],
+    visibility = ["//visibility:public"]
+)
+
+py_library(
+    name="simulation_vbtdev",
+    srcs = glob(["src/simulation/vbt/vbtdev/*.py"]),
+    imports = ["src"],
+    deps = [
+        requirement("vectorbt"),
+        "//momentum/core:core_nb",
+    ],
+    visibility = ["//visibility:private"]
+)
+
+py_library(
+    name="simulation_vbtpro",
+    srcs = glob(["src/simulation/vbt/vbtpro/*.py"]),
+    imports = ["src"],
+    deps = [
+        requirement("vectorbtpro"),
+        "//momentum/core:core_nb",
+    ],
+    visibility = ["//visibility:private"]
+)
+
+py_test(
+    name="test_simulate",
+    srcs = ["test/test_simulate.py"],
+    deps = [
+        ":vbt",
     ],
     size="small",
 )

@@ -1,4 +1,3 @@
-import vectorbt as vbt
 import pandas as pd
 import plotly.express as px
 import numpy as np
@@ -10,6 +9,7 @@ from dateutil.relativedelta import relativedelta
 from tqdm.auto import tqdm
 from typing import List, Callable, Optional
 
+from simulation.vbt import vbt
 from simulation.backtest import backtest
 from simulation.stats import get_stats_of_interest, plot_cumulative_returns
 from position_generation.utils import Direction

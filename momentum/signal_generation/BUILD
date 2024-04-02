@@ -8,7 +8,6 @@ py_library(
         requirement("pandas"),
         requirement("plotly"),
         requirement("numpy"),
-        requirement("pandas-ta"),
     ],
     visibility = ["//visibility:public"],
 )

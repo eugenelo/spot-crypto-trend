@@ -3,13 +3,23 @@ import pandas as pd
 from typing import List
 from functools import reduce
 
-import vectorbt as vbt
-
 from core.constants import TIMESTAMP_COL, POSITION_COL
 from position_generation.constants import (
     NUM_OPEN_LONG_POSITIONS_COL,
     NUM_OPEN_SHORT_POSITIONS_COL,
     NUM_OPEN_POSITIONS_COL,
+)
+from simulation.vbt import (
+    vbt,
+    ENTRY_TIMESTAMP_COL,
+    EXIT_TIMESTAMP_COL,
+    get_entry_trades,
+    get_exit_trades,
+    get_value,
+    get_final_value,
+    get_returns,
+    get_annualized_return,
+    get_annualized_volatility,
 )
 
 
@@ -33,12 +43,13 @@ def get_stats_of_interest(portfolio: vbt.Portfolio, name: str):
     # Append additional stats
     tmp = pd.Series(
         {
-            "Annualized Return [%]": 100.0 * portfolio.annualized_return(),
-            "Annualized Volatility [%]": 100.0 * portfolio.annualized_volatility(),
+            "Annualized Return [%]": 100.0 * get_annualized_return(portfolio),
+            "Annualized Volatility [%]": 100.0 * get_annualized_volatility(portfolio),
             "Avg. Fee per Trade [$]": stats["Total Fees Paid"] / stats["Total Trades"],
             "Avg Daily Turnover [%]": 100.0 * get_turnover(portfolio).mean(),
         }
     )
+
     # Add units to some column names
     stats["Start Value [$]"] = stats.pop("Start Value")
     stats["End Value [$]"] = stats.pop("End Value")
@@ -50,19 +61,19 @@ def get_stats_of_interest(portfolio: vbt.Portfolio, name: str):
 
 def get_turnover(pf_portfolio: vbt.Portfolio) -> pd.Series:
     trade_volume = get_trade_volume(pf_portfolio)
-    pf_value = pf_portfolio.value()
+    pf_value = get_value(pf_portfolio)
     trade_volume = trade_volume.reindex(pf_value.index, fill_value=0)
-    turnover = (trade_volume / pf_portfolio.value()).rename("Turnover [%]")
+    turnover = (trade_volume / pf_value).rename("Turnover [%]")
     return turnover
 
 
 def get_trade_volume(pf_portfolio: vbt.Portfolio) -> pd.Series:
-    entry_trades = pf_portfolio.entry_trades.records_readable
+    entry_trades = get_entry_trades(pf_portfolio)
     entry_trades["Entry Size [$]"] = (
         entry_trades["Size"] * entry_trades["Avg Entry Price"]
     )
-    entry_volume = entry_trades[["Entry Timestamp", "Entry Size [$]"]]
-    entry_volume = entry_volume.rename(columns={"Entry Timestamp": TIMESTAMP_COL})
+    entry_volume = entry_trades[[ENTRY_TIMESTAMP_COL, "Entry Size [$]"]]
+    entry_volume = entry_volume.rename(columns={ENTRY_TIMESTAMP_COL: TIMESTAMP_COL})
     entry_volume = (
         entry_volume.sort_values(by=TIMESTAMP_COL)
         .groupby(TIMESTAMP_COL)
@@ -70,10 +81,10 @@ def get_trade_volume(pf_portfolio: vbt.Portfolio) -> pd.Series:
         .reset_index()
     )
 
-    exit_trades = pf_portfolio.exit_trades.records_readable
+    exit_trades = get_exit_trades(pf_portfolio)
     exit_trades["Exit Size [$]"] = entry_trades["Size"] * entry_trades["Avg Exit Price"]
-    exit_volume = exit_trades[["Exit Timestamp", "Exit Size [$]"]]
-    exit_volume = exit_volume.rename(columns={"Exit Timestamp": TIMESTAMP_COL})
+    exit_volume = exit_trades[[EXIT_TIMESTAMP_COL, "Exit Size [$]"]]
+    exit_volume = exit_volume.rename(columns={EXIT_TIMESTAMP_COL: TIMESTAMP_COL})
     exit_volume = (
         exit_volume.sort_values(by=TIMESTAMP_COL)
         .groupby(TIMESTAMP_COL)

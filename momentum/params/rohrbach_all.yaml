@@ -4,7 +4,7 @@ rebalancing_freq: null
 volume_max_size: 0.01
 rebalancing_buffer: 0.002
 volatility_target: 0.35  # 35% annualized
-cross_sectional_percentage: 0.2  # Keep entire universe
+cross_sectional_percentage: null  # Keep entire universe
 cross_sectional_equal_weight: False # If true, long top bin w/ equal weight & short bottom bin w/ equal weight
 direction: LongOnly
 min_daily_volume: 10000  # Minimum avg daily volume [USD]
