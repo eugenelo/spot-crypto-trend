@@ -21,7 +21,12 @@ from position_generation.utils import (
 from signal_generation.signal_generation import create_trading_signals
 from signal_generation.constants import SignalType
 from core.utils import filter_universe
-from core.constants import in_universe_excl_stablecoins
+from core.constants import (
+    TIMESTAMP_COL,
+    TICKER_COL,
+    POSITION_COL,
+    in_universe_excl_stablecoins,
+)
 
 
 def parse_args():
@@ -120,17 +125,17 @@ def fetch_data(
 
     # Process OHLCV data into a DataFrame
     ohlc_combined = pd.DataFrame(columns=OHLC_COLUMNS)
-    ohlc_combined["timestamp"] = pd.to_datetime(
-        ohlc_combined["timestamp"], utc=True, unit="ms"
+    ohlc_combined[TIMESTAMP_COL] = pd.to_datetime(
+        ohlc_combined[TIMESTAMP_COL], utc=True, unit="ms"
     )
     for symbol, ohlcv in ohlcvs.items():
         df = pd.DataFrame(
             ohlcv,
-            columns=["timestamp", "open", "high", "low", "close", "vwap", "volume"],
+            columns=[TIMESTAMP_COL, "open", "high", "low", "close", "vwap", "volume"],
         )
         df["dollar_volume"] = df["vwap"] * df["volume"]
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, unit="ms")
-        df["ticker"] = symbol
+        df[TIMESTAMP_COL] = pd.to_datetime(df[TIMESTAMP_COL], utc=True, unit="ms")
+        df[TICKER_COL] = symbol
         ohlc_combined = pd.concat([ohlc_combined, df], ignore_index=True)
     return ohlc_combined
 
@@ -202,7 +207,8 @@ def get_positions(kraken: ccxt.kraken, df_signals: pd.DataFrame, account_size: f
         df_positions, tickers_to_keep=tickers_to_keep
     )
     df_nonempty_positions = df_nonempty_positions.loc[
-        df_nonempty_positions["timestamp"] == df_nonempty_positions["timestamp"].max()
+        df_nonempty_positions[TIMESTAMP_COL]
+        == df_nonempty_positions[TIMESTAMP_COL].max()
     ]
 
     # Translate positions to dollar amounts
@@ -212,7 +218,7 @@ def get_positions(kraken: ccxt.kraken, df_signals: pd.DataFrame, account_size: f
         account_size = curr_cash_value
     print(f"Account Size: ${account_size:.2f}")
     df_nonempty_positions["target_dollar_position"] = (
-        df_nonempty_positions["scaled_position"] * account_size
+        df_nonempty_positions[POSITION_COL] * account_size
     )
 
     # Translate dollar positions to trades
@@ -222,16 +228,15 @@ def get_positions(kraken: ccxt.kraken, df_signals: pd.DataFrame, account_size: f
     df_balance["current_position"] = (
         df_balance["current_dollar_position"] / account_size
     )
-    df_balance.rename(columns={"index": "ticker"}, inplace=True)
-    df_balance["ticker"] = df_balance["ticker"].astype(str) + "/USD"
-    df_balance.loc[df_balance["ticker"] == "USD/USD", "ticker"] = "USD"
+    df_balance.rename(columns={"index": TICKER_COL}, inplace=True)
+    df_balance[TICKER_COL] = df_balance[TICKER_COL].astype(str) + "/USD"
+    df_balance.loc[df_balance[TICKER_COL] == "USD/USD", TICKER_COL] = "USD"
     df_nonempty_positions = df_nonempty_positions.merge(
-        df_balance, how="outer", on="ticker"
+        df_balance, how="outer", on=TICKER_COL
     )
     df_nonempty_positions.fillna(0.0, inplace=True)
     df_nonempty_positions["position_delta"] = (
-        df_nonempty_positions["scaled_position"]
-        - df_nonempty_positions["current_position"]
+        df_nonempty_positions[POSITION_COL] - df_nonempty_positions["current_position"]
     )
     df_nonempty_positions["trade"] = (
         df_nonempty_positions["target_dollar_position"]
@@ -313,10 +318,10 @@ def main(args):
                 assert df_ohlc.columns.equals(df_existing_output.columns)
                 df_ohlc = pd.concat([df_ohlc, df_existing_output])
                 df_ohlc.sort_values(
-                    by=["timestamp", "ticker"], ascending=True, inplace=True
+                    by=[TIMESTAMP_COL, TICKER_COL], ascending=True, inplace=True
                 )
                 df_ohlc.drop_duplicates(
-                    subset=["timestamp", "ticker"],
+                    subset=[TIMESTAMP_COL, TICKER_COL],
                     keep="first",  # Keep the latest available data
                     inplace=True,
                 )
@@ -340,12 +345,12 @@ def main(args):
             kraken, df_signals, account_size=args.account_size
         )
         position_cols = [
-            "timestamp",
-            "ticker",
+            TIMESTAMP_COL,
+            TICKER_COL,
             "30d_num_days_volume_above_5M",
             "volume_consistent",
             "30d_log_returns",
-            "scaled_position",
+            POSITION_COL,
             "current_position",
             "position_delta",
             "target_dollar_position",

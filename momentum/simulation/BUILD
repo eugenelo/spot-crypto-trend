@@ -30,3 +30,12 @@ py_test(
     ],
     size="small",
 )
+
+py_test(
+    name="test_optimize",
+    srcs = ["test/test_optimize.py"],
+    deps = [
+        ":simulation"
+    ],
+    size="small",
+)

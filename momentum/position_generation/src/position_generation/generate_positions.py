@@ -9,20 +9,28 @@ from position_generation.constants import (
     VOL_LONG_COL,
     VOL_FORECAST_COL,
     VOL_TARGET_COL,
-    VOL_SCALING_COL,
     ABS_SIGNAL_AVG_COL,
     RANK_COL,
+    IDM_COL,
+    IDM_30D_EMA_COL,
+    FDM_COL,
+    FDM_30D_EMA_COL,
+    DM_COL,
+    DM_30D_EMA_COL,
+    POSITION_SCALING_FACTOR_COL,
     SCALED_SIGNAL_COL,
     NUM_UNIQUE_ASSETS_COL,
     NUM_LONG_ASSETS_COL,
     NUM_SHORT_ASSETS_COL,
     NUM_KEPT_ASSETS_COL,
     MAX_ABS_POSITION_SIZE_COL,
+    IDM_REFRESH_PERIOD,
 )
 from core.constants import (
     TIMESTAMP_COL,
     TICKER_COL,
     POSITION_COL,
+    PAST_7D_RETURNS_COL,
 )
 from signal_generation.common import cross_sectional_abs_ema
 from signal_generation.volume import create_volume_filter_mask
@@ -33,7 +41,7 @@ def generate_positions(
     signal: str,
     periods_per_day: int,
     direction: Direction,
-    vol_target: Optional[float],
+    volatility_target: Optional[float],
     cross_sectional_percentage: Optional[float],
     cross_sectional_equal_weight: Optional[bool],
     min_daily_volume: Optional[float],
@@ -46,68 +54,92 @@ def generate_positions(
     df[VOL_FORECAST_COL] = generate_volatility_forecast(df)
 
     # Construct trade signal
-    scaled_signal_col = SCALED_SIGNAL_COL.format(signal=signal)
-    df[scaled_signal_col] = df[signal]
+    df[SCALED_SIGNAL_COL] = df[signal]
+
+    # Scale each signal s.t. the absolute average is equal to 1 (to achieve risk target on average)
+    # This comes before any filters are applied.
+    df = scale_signal_avg_to_1(
+        df, signal=SCALED_SIGNAL_COL, periods_per_day=periods_per_day
+    )
+
     # Don't take positions in assets where we can't estimate volatility
-    df.loc[df[VOL_FORECAST_COL].isna(), scaled_signal_col] = np.nan
+    df.loc[df[VOL_FORECAST_COL].isna(), SCALED_SIGNAL_COL] = np.nan
 
     # Apply volume filter
     df = create_volume_filter_mask(
         df, min_daily_volume=min_daily_volume, max_daily_volume=max_daily_volume
     )
-    df.loc[df["filter_volume"], scaled_signal_col] = np.nan
+    df.loc[df["filter_volume"], SCALED_SIGNAL_COL] = np.nan
 
     # Generate signal ranks
-    rank_col = RANK_COL.format(signal=scaled_signal_col)
-    df[rank_col] = generate_signal_rank(df, signal=scaled_signal_col)
+    rank_col = RANK_COL.format(signal=SCALED_SIGNAL_COL)
+    df[rank_col] = generate_signal_rank(df, signal=SCALED_SIGNAL_COL)
 
     # Get number of investable assets in universe per timestamp. Assets which are filtered out
     # from consideration are denoted by np.nan values.
-    df[NUM_UNIQUE_ASSETS_COL] = generate_num_unique_assets(df, signal=scaled_signal_col)
+    df[NUM_UNIQUE_ASSETS_COL] = generate_num_unique_assets(df)
 
-    # Scale signal s.t. the absolute average is equal to 1 (to achieve risk target on average)
-    # TODO(@eugene.lo): This should probably come after all of the filters, somehow.
-    df = scale_signal_avg_to_1(
-        df, signal=scaled_signal_col, periods_per_day=periods_per_day
+    # Compute diversification multipliers. This comes after all filters have been applied.
+    idm_ser = compute_idm(df, feature_column=PAST_7D_RETURNS_COL)
+    idm_30d_ema = idm_ser.ewm(span=30, adjust=True, ignore_na=False).mean()
+    fdm_ser = compute_idm(df, feature_column=signal)
+    fdm_30d_ema = fdm_ser.ewm(span=30, adjust=True, ignore_na=False).mean()
+    dm_combined_ser = idm_ser * fdm_ser
+    dm_30d_ema = dm_combined_ser.ewm(span=30, adjust=True, ignore_na=False).mean()
+    dm_df = (
+        pd.DataFrame.from_dict(
+            {
+                IDM_COL: idm_ser,
+                IDM_30D_EMA_COL: idm_30d_ema,
+                FDM_COL: fdm_ser,
+                FDM_30D_EMA_COL: fdm_30d_ema,
+                DM_COL: dm_combined_ser,
+                DM_30D_EMA_COL: dm_30d_ema,
+            }
+        )
+        .reset_index()
+        .rename(columns={"index": TIMESTAMP_COL})
     )
+    df = df.merge(dm_df, how="left", on=TIMESTAMP_COL)
 
+    # Apply cross-sectional weighting, if applicable
     if cross_sectional_percentage is not None:
         if direction == Direction.Both:
             assert (
                 cross_sectional_percentage <= 0.5
             ), "cross_sectional_percentage can't be greater than 0.5 when direction is Both!"
-        # Apply cross-sectional filter
         df = apply_cross_sectional_filter(
             df,
-            signal=scaled_signal_col,
+            signal=SCALED_SIGNAL_COL,
             rank_col=rank_col,
             cross_sectional_percentage=cross_sectional_percentage,
             cross_sectional_equal_weight=cross_sectional_equal_weight or False,
         )
     else:
-        # No cross-sectional filter, could theoretically get long/short our entire universe
+        # No cross-sectional filter, could theoretically get long/short the entire universe
         df[NUM_LONG_ASSETS_COL] = df[NUM_UNIQUE_ASSETS_COL]
         df[NUM_SHORT_ASSETS_COL] = df[NUM_UNIQUE_ASSETS_COL]
     df[NUM_KEPT_ASSETS_COL] = df[NUM_LONG_ASSETS_COL] + df[NUM_SHORT_ASSETS_COL]
-    df[NUM_KEPT_ASSETS_COL] = df[[NUM_KEPT_ASSETS_COL, NUM_UNIQUE_ASSETS_COL]].max(
+    df[NUM_KEPT_ASSETS_COL] = df[[NUM_KEPT_ASSETS_COL, NUM_UNIQUE_ASSETS_COL]].min(
         axis=1
     )
 
     # Apply direction constraints
-    df = apply_direction_constraint(df, signal=scaled_signal_col, direction=direction)
+    df = apply_direction_constraint(df, signal=SCALED_SIGNAL_COL, direction=direction)
 
     # Position sizing
-    if vol_target is not None:
+    if volatility_target is not None:
         # Volatility targeting
-        df[VOL_TARGET_COL] = vol_target / df[NUM_KEPT_ASSETS_COL]
-        df[VOL_SCALING_COL] = df[VOL_TARGET_COL] / df[VOL_FORECAST_COL]
-        df[POSITION_COL] = df[scaled_signal_col] * df[VOL_SCALING_COL]
+        df[VOL_TARGET_COL] = volatility_target / df[NUM_KEPT_ASSETS_COL]
+        df[POSITION_SCALING_FACTOR_COL] = df[VOL_TARGET_COL] / df[VOL_FORECAST_COL]
     else:
         # Scale in proportion to signal and number of assets in universe.
-        df[POSITION_COL] = df[scaled_signal_col] / df[NUM_KEPT_ASSETS_COL]
+        df[POSITION_SCALING_FACTOR_COL] = 1 / df[NUM_KEPT_ASSETS_COL]
+    df[POSITION_SCALING_FACTOR_COL] *= df[DM_30D_EMA_COL]
+    df[POSITION_COL] = df[SCALED_SIGNAL_COL] * df[POSITION_SCALING_FACTOR_COL]
 
     # Leverage constraints + Cap wild sizing from very low volatility estimates
-    df = cap_position_size(df, direction=direction, leverage=1)
+    df = cap_position_size(df, direction=direction, leverage=3)
 
     # Lag positions by one day, avoid cheating w/ future information
     df[POSITION_COL] = df[POSITION_COL].shift(1)
@@ -147,9 +179,9 @@ def generate_signal_rank(df: pd.DataFrame, signal: str) -> pd.Series:
     )
 
 
-def generate_num_unique_assets(df: pd.DataFrame, signal: str) -> pd.Series:
+def generate_num_unique_assets(df: pd.DataFrame) -> pd.Series:
     return (
-        df.loc[~df[signal].isna()]
+        df.loc[~df[SCALED_SIGNAL_COL].isna()]
         .groupby(TIMESTAMP_COL)[TICKER_COL]
         .transform(pd.Series.nunique)
     )
@@ -214,7 +246,9 @@ def scale_signal_avg_to_1(
     return df
 
 
-def cap_position_size(df: pd.DataFrame, direction: Direction, leverage: float):
+def cap_position_size(
+    df: pd.DataFrame, direction: Direction, leverage: float
+) -> pd.DataFrame:
     if direction == Direction.LongOnly:
         df[MAX_ABS_POSITION_SIZE_COL] = leverage / df[NUM_LONG_ASSETS_COL]
     elif direction == Direction.ShortOnly:
@@ -227,3 +261,62 @@ def cap_position_size(df: pd.DataFrame, direction: Direction, leverage: float):
         df[MAX_ABS_POSITION_SIZE_COL],
     )
     return df
+
+
+def generate_correlation_matrix(df: pd.DataFrame, column: str) -> pd.DataFrame:
+    feature_mat = pd.pivot_table(
+        df,
+        index=TIMESTAMP_COL,
+        columns=TICKER_COL,
+        values=column,
+        dropna=False,
+        fill_value=0.0,
+    )
+    return feature_mat.corr()
+
+
+def compute_idm(df: pd.DataFrame, feature_column: str) -> pd.Series:
+    feature_mat = pd.pivot_table(
+        df,
+        index=TIMESTAMP_COL,
+        columns=TICKER_COL,
+        values=feature_column,
+        dropna=False,
+    )
+    full_date_range = df.sort_values(by=TIMESTAMP_COL, ascending=True)[
+        TIMESTAMP_COL
+    ].unique()
+    last_stamp_updated = None
+    idm_lst = []
+    for timestamp in full_date_range:
+        timestamp_mask = df[TIMESTAMP_COL] == timestamp
+        valid_signal_mask = ~df[SCALED_SIGNAL_COL].isna()
+        tickers = df.loc[(timestamp_mask) & (valid_signal_mask)][TICKER_COL]
+        if tickers.shape[0] == 0:
+            # No valid positions
+            idm_lst.append(np.nan)
+            continue
+
+        if (
+            last_stamp_updated is None
+            or (timestamp - last_stamp_updated) > IDM_REFRESH_PERIOD
+        ):
+            # Equal weight across all assets (risk parity)
+            weights = np.full(tickers.shape, fill_value=1 / tickers.shape[0])
+            # Replace negative correlations with 0
+            corr = (
+                feature_mat.loc[feature_mat.index <= timestamp][tickers]
+                .corr()
+                .fillna(value=0)
+                .to_numpy()
+            )
+            corr = np.clip(corr, 0, 1)
+            idm_divisor = np.sqrt(weights.dot(corr).dot(weights.T))
+            idm = 1 / idm_divisor if idm_divisor > 0 else np.nan
+            last_stamp_updated = timestamp
+        else:
+            # Reuse previous idm
+            idm = idm_lst[-1]
+        idm_lst.append(idm)
+    idm_ser = pd.Series(idm_lst, index=full_date_range, name=IDM_COL)
+    return idm_ser

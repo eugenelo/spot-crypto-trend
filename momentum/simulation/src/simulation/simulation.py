@@ -6,6 +6,7 @@ from position_generation.v1 import (
     generate_positions_v1,
     CRYPTO_MOMO_DEFAULT_PARAMS,
 )
+from core.constants import POSITION_COL
 
 
 def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
@@ -15,11 +16,11 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
     # Generate returns
     # Daily rebalancing
     df_analysis["strat_simple_returns_daily"] = (
-        df_analysis["scaled_position"] * df_analysis["next_1d_returns"]
+        df_analysis[POSITION_COL] * df_analysis["next_1d_returns"]
     )
     # Weekly rebalancing, sell on Thursday 12am UTC, buy on Friday 12am UTC. Put on position to get next day returns.
     df_analysis["strat_simple_returns_weekly"] = df_analysis.apply(
-        lambda x: x["scaled_position"] * x["next_6d_returns"]
+        lambda x: x[POSITION_COL] * x["next_6d_returns"]
         if x["timestamp"].day_name() == "Thursday"
         else 0,
         axis=1,

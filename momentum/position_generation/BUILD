@@ -6,6 +6,7 @@ py_library(
     imports = ["src"],
     deps = [
         requirement("vectorbt"),
+        "//momentum/signal_generation:signal_generation",
     ],
     visibility = ["//visibility:public"],
 )

@@ -5,6 +5,8 @@ CLOSE_COL = "close"
 VWAP_COL = "vwap"
 PRICE_COL_SIGNAL_GEN = VWAP_COL
 PRICE_COL_BACKTEST = VWAP_COL
+RETURNS_COL = "returns"
+PAST_7D_RETURNS_COL = "7d_returns"
 
 POSITION_COL = "scaled_position"
 

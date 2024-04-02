@@ -3,8 +3,9 @@ generate_benchmark: btc
 rebalancing_freq: null
 volume_max_size: 0.01
 rebalancing_buffer: 0.002
-vol_target: 0.35  # 35% annualized
-cross_sectional_percentage: 0.3  # Keep top/bottom 30% of universe
+volatility_target: 0.35  # 35% annualized
+cross_sectional_percentage: 0.2  # Keep entire universe
+cross_sectional_equal_weight: False # If true, long top bin w/ equal weight & short bottom bin w/ equal weight
 direction: LongOnly
 min_daily_volume: 10000  # Minimum avg daily volume [USD]
 max_daily_volume: null  # Maximum avg daily volume [USD]
@@ -31,3 +32,22 @@ params:
 # Total Trades                                       1                      11974
 # Total Fees Paid [$]                            36.87                    5855.43
 # Avg. Fee per Trade [$]                         36.87                       0.49
+
+#                                            Benchmark                pf_Strategy
+# index
+# Annualized Return [%]                          53.04                      41.91
+# Annualized Volatility [%]                      64.25                      31.33
+# Sharpe Ratio                                    0.98                       1.28
+# Sortino Ratio                                   1.46                       1.82
+# Max Drawdown [%]                               76.23                      42.93
+# Max Drawdown Duration              783 days 00:00:00          783 days 00:00:00
+# Max Gross Exposure [%]                         99.16                      78.09
+# Win Rate [%]                                     NaN                      32.28
+# Start                      2020-01-01 00:00:00-05:00  2020-01-01 00:00:00-05:00
+# End                        2023-12-31 00:00:00-05:00  2023-12-31 00:00:00-05:00
+# Start Value [$]                            1000000.0                  1000000.0
+# End Value [$]                             5491649.88                 4059074.21
+# Total Return [%]                              449.16                     305.91
+# Total Trades                                       1                      14019
+# Total Fees Paid [$]                          1756.17                  146961.04
+# Avg. Fee per Trade [$]                       1756.17                      10.48

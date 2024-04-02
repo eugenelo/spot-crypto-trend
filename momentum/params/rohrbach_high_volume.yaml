@@ -3,7 +3,7 @@ generate_benchmark: btc
 rebalancing_freq: null
 volume_max_size: 0.01
 rebalancing_buffer: 0.002
-vol_target: 0.35  # 35% annualized
+volatility_target: 0.35  # 35% annualized
 cross_sectional_percentage: 0.2  # Keep top/bottom 20% of universe
 cross_sectional_equal_weight: False
 direction: LongOnly

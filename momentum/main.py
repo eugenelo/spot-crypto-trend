@@ -13,7 +13,7 @@ from analysis.analysis import analysis
 from simulation.simulation import simulation
 from simulation.utils import rebal_freq_supported
 from simulation.backtest import backtest_crypto
-from simulation.optimize import optimize_crypto, optimize_rebalancing_buffer
+from simulation.optimize import optimize
 from signal_generation.signal_generation import (
     create_analysis_signals,
     create_trading_signals,
@@ -26,7 +26,12 @@ from position_generation.v1 import generate_positions_v1
 from position_generation.generate_positions import generate_positions
 from data.utils import load_ohlc_to_hourly_filtered, load_ohlc_to_daily_filtered
 from core.utils import get_periods_per_day
-from core.constants import in_universe_excl_stablecoins
+from core.constants import (
+    TIMESTAMP_COL,
+    TICKER_COL,
+    POSITION_COL,
+    in_universe_excl_stablecoins,
+)
 
 
 def parse_args():
@@ -55,6 +60,12 @@ def parse_args():
     )
     parser.add_argument("--timezone", "-t", type=str, help="Timezone", default="UTC")
     parser.add_argument("--params_path", "-p", type=str, help="Params yaml file path")
+    parser.add_argument(
+        "--optimize_params_path",
+        "-op",
+        type=str,
+        help="Optimization params yaml file path",
+    )
     parser.add_argument(
         "--rebalancing_freq", "-r", type=str, help="Rebalancing frequency"
     )
@@ -88,7 +99,7 @@ def get_generate_positions(params: dict, periods_per_day: int) -> Callable:
         else:
             raise ValueError("Invalid response_fn")
         direction = Direction(params["direction"])
-        vol_target = params.get("vol_target", None)
+        volatility_target = params.get("volatility_target", None)
         cross_sectional_percentage = params.get("cross_sectional_percentage", None)
         cross_sectional_equal_weight = params.get("cross_sectional_equal_weight", False)
         min_daily_volume = params.get("min_daily_volume", None)
@@ -98,7 +109,7 @@ def get_generate_positions(params: dict, periods_per_day: int) -> Callable:
             signal=signal,
             periods_per_day=periods_per_day,
             direction=direction,
-            vol_target=vol_target,
+            volatility_target=volatility_target,
             cross_sectional_percentage=cross_sectional_percentage,
             cross_sectional_equal_weight=cross_sectional_equal_weight,
             min_daily_volume=min_daily_volume,
@@ -146,8 +157,8 @@ if __name__ == "__main__":
     # Infer periods per day from the timestamp column for the first ticker
     periods_per_day = get_periods_per_day(
         timestamp_series=df_ohlc.loc[
-            df_ohlc["ticker"] == df_ohlc["ticker"].unique()[0]
-        ]["timestamp"]
+            df_ohlc[TICKER_COL] == df_ohlc[TICKER_COL].unique()[0]
+        ][TIMESTAMP_COL]
     )
 
     # Load params
@@ -156,13 +167,11 @@ if __name__ == "__main__":
         with open(args.params_path, "r") as yaml_file:
             params = yaml.safe_load(yaml_file)
         print(f"Loaded params: {params}")
-
-    # Get position and benchmark generation functions
-    assert (
-        "generate_positions" in params and "generate_benchmark" in params
-    ), "Position/Benchmark Generation functions should be specified in params!"
-    generate_positions_fn = get_generate_positions(params, periods_per_day)
-    generate_benchmark_fn = get_generate_benchmark(params)
+    optimize_params = {}
+    if args.optimize_params_path is not None:
+        with open(args.optimize_params_path, "r") as yaml_file:
+            optimize_params = yaml.safe_load(yaml_file)
+        print(f"Loaded optimize_params: {optimize_params}")
 
     # Create signals
     if args.mode == "analysis" or args.mode == "simulation":
@@ -175,11 +184,11 @@ if __name__ == "__main__":
         )
 
     # Validate dates
-    data_start = df_analysis["timestamp"].min()
+    data_start = df_analysis[TIMESTAMP_COL].min()
     if start_date < data_start:
         print(f"Input start_date is before start of data! Setting to {data_start}")
         start_date = data_start
-    data_end = df_analysis["timestamp"].max()
+    data_end = df_analysis[TIMESTAMP_COL].max()
     if end_date > data_end:
         print(f"Input end_date is after end of data! Setting to {data_end}")
         end_date = data_end
@@ -212,12 +221,19 @@ if __name__ == "__main__":
     elif args.mode == "simulation":
         df_analysis = df_analysis.loc[
             (
-                (df_analysis["timestamp"] >= start_date)
-                & (df_analysis["timestamp"] <= end_date)
+                (df_analysis[TIMESTAMP_COL] >= start_date)
+                & (df_analysis[TIMESTAMP_COL] <= end_date)
             )
         ]
         simulation(df_analysis)
     elif args.mode == "backtest":
+        # Get position and benchmark generation functions
+        assert (
+            "generate_positions" in params and "generate_benchmark" in params
+        ), "Position/Benchmark Generation functions should be specified in params!"
+        generate_positions_fn = get_generate_positions(params, periods_per_day)
+        generate_benchmark_fn = get_generate_benchmark(params)
+
         backtest_crypto(
             df_analysis,
             periods_per_day=periods_per_day,
@@ -232,19 +248,35 @@ if __name__ == "__main__":
             skip_plots=args.skip_plots,
         )
     elif args.mode == "optimize":
-        optimize_rebalancing_buffer(
+        optimize(
             df_analysis,
             periods_per_day=periods_per_day,
-            generate_positions=generate_positions_fn,
+            optimize_params=optimize_params,
             start_date=start_date,
             end_date=end_date,
             initial_capital=args.initial_capital,
-            rebalancing_freq=rebalancing_freq,
             volume_max_size=volume_max_size,
-            vol_target=params.get("vol_target", None),
             skip_plots=args.skip_plots,
         )
+        # optimize_rebalancing_buffer(
+        #     df_analysis,
+        #     periods_per_day=periods_per_day,
+        #     generate_positions=generate_positions_fn,
+        #     start_date=start_date,
+        #     end_date=end_date,
+        #     initial_capital=args.initial_capital,
+        #     rebalancing_freq=rebalancing_freq,
+        #     volume_max_size=volume_max_size,
+        #     volatility_target=params.get("volatility_target", None),
+        #     skip_plots=args.skip_plots,
+        # )
     elif args.mode == "positions":
+        # Get position generation function
+        assert (
+            "generate_positions" in params
+        ), "Position Generation function should be specified in params!"
+        generate_positions_fn = get_generate_positions(params, periods_per_day)
+
         positions = generate_positions_fn(df_analysis)
         nonempty_positions = nonempty_positions(positions, timestamp=end_date)
         print(nonempty_positions)
@@ -252,7 +284,7 @@ if __name__ == "__main__":
         if args.output_path is not None:
             output_path = Path(args.output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            nonempty_positions[["timestamp", "ticker", "scaled_position"]].to_csv(
+            nonempty_positions[[TIMESTAMP_COL, TICKER_COL, POSITION_COL]].to_csv(
                 str(output_path)
             )
             print(f"Wrote positions to '{output_path}'")

@@ -36,7 +36,7 @@ def create_historical_return_signals(
         ) * np.sqrt(365 / periods_per_day)
 
     # Calculate rolling historical returns
-    for lookback_days in [15, 21, 30]:
+    for lookback_days in [7, 15, 21, 30]:
         # Returns
         ret_colname = f"{lookback_days}d_returns"
         periods = lookback_days * periods_per_day
