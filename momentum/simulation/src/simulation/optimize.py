@@ -129,12 +129,15 @@ def generate_parameter_sets(optimize_params: dict) -> List[OptimizeParameterSet]
 
     out = []
     for param_set in product(*params):
-        pf_name = ", ".join(
-            [
-                f"{param_names[idx]}: {param_set[idx]:.4f}"
-                for idx in param_idx_of_interest
-            ]
-        )
+        param_strs = []
+        for idx in param_idx_of_interest:
+            param = param_set[idx]
+            if isinstance(param, float):
+                param_str = f"{param:.4g}"
+            else:
+                param_str = str(param)
+            param_strs.append(f"{param_names[idx]}: {param_str}")
+        pf_name = ", ".join(param_strs)
         out.append(OptimizeParameterSet(pf_name, *param_set))
     return out
 

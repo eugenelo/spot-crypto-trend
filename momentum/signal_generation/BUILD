@@ -8,6 +8,7 @@ py_library(
         requirement("pandas"),
         requirement("plotly"),
         requirement("numpy"),
+        "//momentum/core:core",
     ],
     visibility = ["//visibility:public"],
 )
