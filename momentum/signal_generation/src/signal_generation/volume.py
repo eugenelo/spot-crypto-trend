@@ -57,6 +57,6 @@ def create_volume_filter_mask(
         )
     # Create filtered column (True --> row should be filtered out)
     filter_volume_col = "filter_volume"
-    df[filter_volume_col] = (~df[volume_above_min]) | (~df[volume_below_max])
+    df[filter_volume_col] = ~((df[volume_above_min]) & (df[volume_below_max]))
 
     return df

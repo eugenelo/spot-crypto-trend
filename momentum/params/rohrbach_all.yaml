@@ -3,6 +3,8 @@ generate_benchmark: btc
 signal: rohrbach_exponential
 direction: LongOnly
 rebalancing_freq: null
+volume_max_size: 0.01
+
 rebalancing_buffer: 0.002
 volatility_target: 0.40
 cross_sectional_percentage: null

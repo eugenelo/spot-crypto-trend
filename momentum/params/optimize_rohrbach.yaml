@@ -1,11 +1,13 @@
 signal: rohrbach_exponential
 direction: LongOnly
 rebalancing_freq: null
+volume_max_size: 0.01
+
 rebalancing_buffer: 0.002
 volatility_target: 0.40
 cross_sectional_percentage: null
 cross_sectional_equal_weight: False
-min_daily_volume: 5000000  # Minimum avg daily volume [USD]
+min_daily_volume: 10000  # Minimum avg daily volume [USD]
 max_daily_volume: null  # Maximum avg daily volume [USD]
 with_fees: True
 leverage: 2.0
@@ -15,61 +17,64 @@ leverage: 2.0
 #   step_size: 0.05
 #   num_steps: 20
 # index                     Sharpe Ratio Total Fees Paid [$] Total Trades Total Return [%] Max Drawdown [%] Annualized Return [%] Annualized Volatility [%] Avg Daily Turnover [%] Max Gross Exposure [%]
-# volatility_target: 0.2500         1.53             7242.06         9983           319.27            39.63                 43.06                     25.56                   1.64                 102.04
-# volatility_target: 0.3000         1.52             9947.29        11451           427.74            44.38                 51.52                     30.42                   2.14                 110.68
-# volatility_target: 0.4000         1.51            15575.21        13601           658.52            52.68                  65.9                     38.46                   2.96                 116.04
-# volatility_target: 0.3500          1.5            12699.44        12742           538.41            48.96                 58.91                     34.98                    2.5                 114.96
-# volatility_target: 0.4500          1.5            17808.55        14293           738.22            56.04                 70.09                     41.17                   3.17                 118.17
-# volatility_target: 0.2000         1.49             5062.74         8253           213.29            34.62                 33.02                     20.57                   1.21                  87.29
-# volatility_target: 0.5000         1.47            19435.38        14531           785.37            58.29                 72.43                     43.65                   3.16                 120.88
-# volatility_target: 0.5500         1.43            20290.96        14658            787.5            59.98                 72.54                     45.42                   3.48                 123.76
-# volatility_target: 0.1500         1.42              3497.5         6412           131.28            28.48                  23.3                     15.59                   0.85                  69.29
-# volatility_target: 0.6000         1.42            21859.97        14803           823.97             62.3                 74.28                     47.05                   3.46                 125.81
-# volatility_target: 0.1000         1.35             1898.39         4484            74.59             20.5                 14.94                     10.75                   0.53                  53.56
+# volatility_target: 0.3000         1.55             8510.79        10468           403.98             42.0                 49.79                     28.79                   1.68                 109.65
+# volatility_target: 0.2500         1.54             6285.45         8943           294.44            37.57                 40.89                     24.12                   1.33                 102.28
+# volatility_target: 0.3500         1.53            11202.34        11899           514.45            47.06                 57.39                     33.33                   2.04                 113.29
+# volatility_target: 0.4000         1.51            13472.65        13062           606.75             50.8                 62.99                     37.09                    2.4                  116.3
+# volatility_target: 0.2000         1.49             4503.84         7310           194.55            33.11                 30.98                     19.36                   1.02                  88.37
+# volatility_target: 0.4500         1.48            15418.39        13932           673.79            53.83                 66.73                     40.02                   2.71                 119.37
+# volatility_target: 0.5000         1.47            17251.98        14592           738.16            56.79                 70.09                     42.32                   2.99                 120.77
+# volatility_target: 0.5500         1.45            18228.32        15147           775.34             59.5                 71.94                     44.24                   3.06                 120.77
+# volatility_target: 0.6000         1.43            19040.81        15319            791.8            61.34                 72.74                     45.95                    3.2                 123.61
+# volatility_target: 0.1500         1.41             3070.48         5647            120.1            27.31                 21.79                      14.7                   0.71                  69.72
+# volatility_target: 0.1000         1.29             1668.02         4086             66.1            19.71                 13.52                     10.23                   0.47                  53.34
+# volatility_target: 0.0500         1.03              768.95         2494            27.52            11.81                  6.26                      6.06                   0.24                  33.41
+# # Choosing 0.40 target based on acceptable max drawdown + Sharpe
 
 # 2) Optimize rebalancing buffer
 # rebalancing_buffer:
 #   step_size: 0.0005
 #   num_steps: 40
 # index                      Sharpe Ratio Total Fees Paid [$] Total Trades Total Return [%] Max Drawdown [%] Annualized Return [%] Annualized Volatility [%] Avg Daily Turnover [%] Max Gross Exposure [%]
-# rebalancing_buffer: 0.0015         1.52            17231.48        15911           650.54            51.16                 65.46                     38.08                   3.24                 117.26
-# rebalancing_buffer: 0.0020         1.51            15575.21        13601           658.52            52.68                  65.9                     38.46                   2.96                 116.04
-# rebalancing_buffer: 0.0010         1.51            18961.96        18754           627.79            49.82                 64.19                      37.7                   3.58                 115.87
-# rebalancing_buffer: 0.0005         1.49            21205.81        23379           597.92             49.4                 62.48                     37.41                    4.0                  118.2
-# rebalancing_buffer: 0.0025         1.49            14038.24        11908           642.09            54.26                 64.99                     38.82                   2.69                 115.53
-# rebalancing_buffer: 0.0030         1.47            12839.23        10305           633.59            55.53                 64.52                     39.23                   2.38                 115.25
-# rebalancing_buffer: 0.0035         1.45            11738.43         9000           619.31            56.89                 63.71                     39.58                   2.18                 114.28
-# rebalancing_buffer: 0.0040         1.41            10793.66         7990           592.94            58.45                 62.19                     39.96                    2.0                 115.14
-# rebalancing_buffer: 0.0045         1.37             9907.73         7075           560.08            60.47                 60.24                     40.35                   1.83                 115.11
-# rebalancing_buffer: 0.0050         1.33             9002.84         6285           520.03            62.25                 57.75                     40.59                   1.65                 114.77
-# rebalancing_buffer: 0.0055          1.3             8318.79         5688           494.73            63.35                 56.12                     40.78                   1.51                 114.67
-# rebalancing_buffer: 0.0060         1.27             7727.87         5177           471.61            64.34                 54.58                      41.0                   1.44                 114.22
-# rebalancing_buffer: 0.0065         1.25             7085.33         4644            456.1            64.77                 53.52                     41.12                   1.35                 115.43
-# rebalancing_buffer: 0.0070         1.24             6530.99         4222           446.98            64.66                 52.89                     41.24                   1.34                 115.15
-# rebalancing_buffer: 0.0075         1.22             6041.09         3911           433.91            64.69                 51.96                     41.39                   1.26                 115.41
-# rebalancing_buffer: 0.0080         1.21             5619.77         3648           423.15            64.82                 51.19                     41.56                   1.23                 114.55
-# rebalancing_buffer: 0.0085         1.19             5235.18         3391           413.45            64.89                 50.49                     41.76                   1.22                 113.67
-# rebalancing_buffer: 0.0090         1.18             4816.19         3145           403.32            64.83                 49.74                     41.88                    1.1                 112.97
-# rebalancing_buffer: 0.0095         1.17             4524.51         2911           397.43            64.79                  49.3                     41.99                   1.01                 111.89
-# rebalancing_buffer: 0.0100         1.16             4203.02         2680           394.26            64.66                 49.06                     42.09                   0.97                 111.62
-# rebalancing_buffer: 0.0110         1.16             3795.48         2289           393.08            64.27                 48.97                     42.26                   0.87                 111.54
-# rebalancing_buffer: 0.0105         1.16             4073.27         2474           390.45            64.62                 48.78                      42.2                   0.92                 111.24
-# rebalancing_buffer: 0.0115         1.16             3636.38         2147           391.41            63.76                 48.85                     42.29                   0.84                  111.3
-# rebalancing_buffer: 0.0120         1.15             3389.81         2026           390.77            63.33                  48.8                     42.34                   0.82                 111.68
-# rebalancing_buffer: 0.0125         1.15             3259.52         1899           389.34            63.08                 48.69                     42.39                   0.81                 109.92
+# rebalancing_buffer: 0.0015         1.52            15001.91        15826           611.81            49.28                 63.28                     36.82                   2.69                  117.7
+# rebalancing_buffer: 0.0010         1.52            16671.08        19401           600.96            48.48                 62.66                     36.58                   3.28                 118.52
+# rebalancing_buffer: 0.0020         1.51            13472.65        13062           606.75             50.8                 62.99                     37.09                    2.4                  116.3
+# rebalancing_buffer: 0.0005          1.5             18894.3        24972           570.94            48.41                 60.89                     36.28                   3.75                 118.27
+# rebalancing_buffer: 0.0025         1.48            12182.48        10915           592.91            52.22                 62.19                     37.39                   2.14                 115.97
+# rebalancing_buffer: 0.0030         1.46            10999.86         9339           574.63            53.65                 61.11                     37.65                   1.92                 115.93
+# rebalancing_buffer: 0.0035         1.42            10060.47         7997           541.04             55.8                 59.07                     37.92                   1.79                 116.31
+# rebalancing_buffer: 0.0040         1.38             9210.53         6971           508.46            57.33                 57.01                     38.12                   1.63                 115.18
+# rebalancing_buffer: 0.0045         1.34             8408.31         5987           480.28            58.42                 55.16                     38.29                   1.49                 114.91
+# rebalancing_buffer: 0.0050         1.31             7775.91         5217           455.49            59.05                 53.48                     38.39                   1.37                 114.41
+# rebalancing_buffer: 0.0055         1.28             7218.53         4792           434.34            59.59                  52.0                     38.54                   1.32                 114.75
+# rebalancing_buffer: 0.0060         1.25             6663.58         4508           414.48            59.89                 50.56                     38.74                   1.25                 115.03
+# rebalancing_buffer: 0.0065         1.22             6204.42         4227           394.53            60.11                 49.08                     38.98                   1.21                 115.73
+# rebalancing_buffer: 0.0070          1.2             5710.46         3982           380.71            60.47                 48.03                     39.29                   1.26                 114.78
+# rebalancing_buffer: 0.0075         1.18             5314.74         3755           369.27            60.87                 47.14                     39.58                   1.21                 114.21
+# rebalancing_buffer: 0.0080         1.16             4951.56         3504           361.42            61.36                 46.52                     39.83                   1.11                 113.95
+# rebalancing_buffer: 0.0100         1.15             3931.78         2595           359.54            61.82                 46.38                     40.36                   0.85                 111.68
+# rebalancing_buffer: 0.0085         1.15             4642.14         3263           354.38            61.91                 45.96                     40.02                    1.0                 112.63
+# rebalancing_buffer: 0.0095         1.15             4088.14         2765           354.57            61.91                 45.98                     40.23                   0.92                 112.16
+# rebalancing_buffer: 0.0105         1.14             3721.43         2422           358.81            62.11                 46.32                     40.57                   0.81                 110.95
+# rebalancing_buffer: 0.0090         1.14             4354.73         2979           351.11            61.98                  45.7                     40.14                   0.96                 112.23
+# rebalancing_buffer: 0.0110         1.13             3448.74         2252           352.56            62.37                 45.82                     40.75                   0.79                 110.16
+# rebalancing_buffer: 0.0125         1.13             2880.24         1773           349.33            61.93                 45.56                     40.94                   0.69                 109.05
+# rebalancing_buffer: 0.0115         1.13             3257.37         2100           348.13            62.43                 45.46                     40.87                   0.73                 109.66
+# rebalancing_buffer: 0.0120         1.12             3106.91         1918           346.76            62.26                 45.35                     40.91                    0.7                 109.12
+# # Choosing 0.002 based on fewer trades + acceptable max drawdown + Sharpe + still hit volatility target
 
 # 3) Optimize min daily volume
-# min_daily_volume: [10000, 100000, 1000000, 2000000, 3000000, 4000000, 5000000, 6000000, 7000000, 8000000, 9000000, 10000000]
-# index                           Sharpe Ratio Total Fees Paid [$] Total Trades Total Return [%] Max Drawdown [%] Annualized Return [%] Annualized Volatility [%] Avg Daily Turnover [%] Max Gross Exposure [%]
-# min_daily_volume: 7000000.0000          1.65             17186.1        13402           822.86            50.44                 74.23                     38.08                   2.71                  115.7
-# min_daily_volume: 6000000.0000          1.62            16950.25        13530            788.0            51.11                 72.56                     38.35                    2.8                  116.7
-# min_daily_volume: 3000000.0000          1.61             18470.7        13733           803.98            54.25                 73.33                     38.98                   2.93                 113.84
-# min_daily_volume: 8000000.0000          1.59            16379.71        13381           739.79             51.2                 70.17                      38.1                   2.75                 114.22
-# min_daily_volume: 5000000.0000          1.58            16740.43        13604            751.2            51.56                 70.75                     38.73                    2.8                 117.15
-# min_daily_volume: 9000000.0000          1.57            16076.86        13368           718.77            51.23                  69.1                      38.0                   2.68                 114.81
-# min_daily_volume: 2000000.0000          1.56            18322.93        14135            760.5            54.13                 71.21                     39.39                   3.13                 120.32
-# min_daily_volume: 4000000.0000          1.56            17155.67        13654           740.02            52.64                 70.18                     38.97                   2.84                 116.99
-# min_daily_volume: 1000000.0000          1.56            16882.47        14023           739.43            54.49                 70.15                     39.06                    3.2                  119.4
-# min_daily_volume: 10000000.0000         1.56            15600.07        13332           696.34            51.36                 67.93                      38.0                   2.68                 114.82
-# min_daily_volume: 10000.0000            1.51            15575.21        13601           658.52            52.68                  65.9                     38.46                   2.96                 116.04
-# min_daily_volume: 100000.0000           1.49             16558.9        13896           648.26            55.89                 65.33                     38.96                   3.11                 120.55
+# min_daily_volume: [0, 1000, 5000, 10000, 25000, 50000, 100000, 500000, 1000000, 2000000, 5000000]
+# index                          Sharpe Ratio Total Fees Paid [$] Total Trades Total Return [%] Max Drawdown [%] Annualized Return [%] Annualized Volatility [%] Avg Daily Turnover [%] Max Gross Exposure [%]
+# min_daily_volume: 1000.0000            1.51            13633.07        13277           612.33            50.67                 63.31                     37.24                   2.55                  116.5
+# min_daily_volume: 0.0000               1.51            13472.65        13062           606.75             50.8                 62.99                     37.09                    2.4                  116.3
+# min_daily_volume: 5000.0000             1.5            14774.36        13652           631.92            52.41                 64.43                     38.17                   2.81                 116.93
+# min_daily_volume: 10000.0000           1.49            15019.02        13434           616.82            52.37                 63.57                     37.94                   2.96                  116.4
+# min_daily_volume: 25000.0000            1.4            15236.33        13171           544.47             53.8                 59.28                     38.69                   3.12                 117.36
+# min_daily_volume: 50000.0000           1.34            14993.09        12751           488.21            55.04                 55.69                     38.73                   3.33                 120.85
+# min_daily_volume: 100000.0000          1.32            17001.91        11728           484.21            58.75                 55.42                     39.45                   3.52                 122.72
+# min_daily_volume: 5000000.0000         1.16            28413.14         3345           420.07            73.61                 50.97                     43.79                   5.36                 153.54
+# min_daily_volume: 2000000.0000         1.11            21850.81         5468           366.57            68.83                 46.93                     43.14                   5.11                 145.37
+# min_daily_volume: 500000.0000          1.11            19961.83         8957           350.19            70.53                 45.63                     42.03                   4.37                 136.99
+# min_daily_volume: 1000000.0000         1.05            19795.35         7303           311.86            70.19                 42.42                     42.27                   4.73                 135.86
+# # Choosing $10000 based on 1% max volume, $50000 initial balance, 0.001 min position size + Sharpe + acceptable max drawdown (diversification benefits)

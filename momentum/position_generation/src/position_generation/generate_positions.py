@@ -40,7 +40,7 @@ from core.constants import (
     POSITION_COL,
     PAST_7D_RETURNS_COL,
 )
-from signal_generation.common import cross_sectional_abs_ema
+from signal_generation.common import sort_dataframe, cross_sectional_abs_ema
 from signal_generation.volume import create_volume_filter_mask
 
 
@@ -58,7 +58,7 @@ def generate_positions(
 ) -> pd.DataFrame:
     # Ensure that no duplicate rows exist for (ticker, timestamp) combination
     assert not df.duplicated(subset=[TICKER_COL, TIMESTAMP_COL], keep=False).any()
-    df = df.copy()
+    df = sort_dataframe(df.copy())
 
     df[VOL_FORECAST_COL] = generate_volatility_forecast(df)
 
