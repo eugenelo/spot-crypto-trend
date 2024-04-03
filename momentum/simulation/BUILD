@@ -50,7 +50,7 @@ py_test(
     deps = [
         ":vbt",
     ],
-    size="small",
+    size="medium",
 )
 
 py_test(

@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
+          tar xvfz ta-lib-0.4.0-src.tar.gz
+          cd ta-lib
+          ./configure
+          make
+          sudo make install
+
+      - uses: actions/checkout@v2
+      - uses: bazelbuild/setup-bazelisk@v2
+      - run: bazel build //...
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+      - run: bazel test -- //... -//third_party/...
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}

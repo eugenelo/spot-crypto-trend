@@ -15,6 +15,8 @@ async-timeout==4.0.3
 cffi==1.16.0
 jupyterlab==4.1.5
 notebook==6.5.6
+tomli==2.0.1
+exceptiongroup==1.2.0
 TA-Lib==0.4.28
-vectorbtpro[base] @ git+https://${VECTORBT_TOKEN}@github.com/polakowo/vectorbt.pro.git@v2024.4.1
+vectorbtpro[base] @ git+https://${GH_TOKEN}@github.com/polakowo/vectorbt.pro.git@v2024.4.1
 static-frame==2.5.1

@@ -817,6 +817,10 @@ entrypoints==0.4 \
     --hash=sha256:b706eddaa9218a19ebcd67b56818f05bb27589b1ca9e8d797b74affad4ccacd4 \
     --hash=sha256:f174b5ff827504fd3cd97cc3f8649f3693f51538c7e4bdf3ef002c8429d42f9f
     # via jupyter-client
+exceptiongroup==1.2.0 \
+    --hash=sha256:4bfd3996ac73b41e9b9628b04e079f193850720ea5945fc96a08633c66912f14 \
+    --hash=sha256:91f5c769735f051a4290d52edd0858999b57e5876e9f85937691bd4c9fa3ed68
+    # via -r third_party/requirements.txt
 executing==2.0.1 \
     --hash=sha256:35afe2ce3affba8ee97f2d69927fa823b08b472b7b994e36a52a964b93d16147 \
     --hash=sha256:eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc
@@ -3070,6 +3074,10 @@ tinycss2==1.2.1 \
     --hash=sha256:2b80a96d41e7c3914b8cda8bc7f705a4d9c49275616e886103dd839dfc847847 \
     --hash=sha256:8cff3a8f066c2ec677c06dbc7b45619804a6938478d9d73c284b29d14ecb0627
     # via nbconvert
+tomli==2.0.1 \
+    --hash=sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc \
+    --hash=sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f
+    # via -r third_party/requirements.txt
 toolz==0.12.1 \
     --hash=sha256:d22731364c07d72eea0a0ad45bafb2c2937ab6fd38a3507bf55eae8744aa7d85 \
     --hash=sha256:ecca342664893f177a13dac0e6b41cbd8ac25a358e5f215316d43e2100224f4d
@@ -3157,7 +3165,7 @@ vectorbt==0.26.0 \
     # via -r third_party/requirements.txt
 # WARNING: pip install will require the following package to be hashed.
 # Consider using a hashable URL like https://github.com/jazzband/pip-tools/archive/SOMECOMMIT.zip
-vectorbtpro[base,data-base,exec-base,ind-base,io-base,opt-base,perf-base,pfopt-base,plot-base,stats-base] @ git+https://${VECTORBT_TOKEN}@github.com/polakowo/vectorbt.pro.git@v2024.4.1
+vectorbtpro[base,data-base,exec-base,ind-base,io-base,opt-base,perf-base,pfopt-base,plot-base,stats-base] @ git+https://${GH_TOKEN}@github.com/polakowo/vectorbt.pro.git@v2024.4.1
     # via -r third_party/requirements.txt
 wcwidth==0.2.13 \
     --hash=sha256:3da69048e4540d84af32131829ff948f1e022c1c6bdb8d6102117aac784f6859 \
