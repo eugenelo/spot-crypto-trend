@@ -9,7 +9,7 @@ from dateutil.relativedelta import relativedelta
 from tqdm.auto import tqdm
 from typing import List, Callable, Optional
 
-from simulation.vbt import vbt
+from simulation.vbt import vbt, get_annualized_volatility
 from simulation.backtest import backtest
 from simulation.stats import get_stats_of_interest, plot_cumulative_returns
 from position_generation.utils import Direction
@@ -62,6 +62,7 @@ class OptimizeParameterSet:
     min_daily_volume: Optional[float]
     max_daily_volume: Optional[float]
     with_fees: bool
+    leverage: float
 
 
 def generate_parameter_sets(optimize_params: dict) -> List[OptimizeParameterSet]:
@@ -77,6 +78,7 @@ def generate_parameter_sets(optimize_params: dict) -> List[OptimizeParameterSet]
         "min_daily_volume",
         "max_daily_volume",
         "with_fees",
+        "leverage",
     ]
     default_values = {
         "rebalancing_freq": None,
@@ -87,6 +89,7 @@ def generate_parameter_sets(optimize_params: dict) -> List[OptimizeParameterSet]
         "min_daily_volume": None,
         "max_daily_volume": None,
         "with_fees": True,
+        "leverage": 1.0,
     }
     params = []
     for param_name in param_names:
@@ -128,7 +131,7 @@ def generate_parameter_sets(optimize_params: dict) -> List[OptimizeParameterSet]
     for param_set in product(*params):
         pf_name = ", ".join(
             [
-                f"{param_names[idx]}: {param_set[idx]:.2f}"
+                f"{param_names[idx]}: {param_set[idx]:.4f}"
                 for idx in param_idx_of_interest
             ]
         )
@@ -162,11 +165,13 @@ def optimize(
             cross_sectional_equal_weight=param_set.cross_sectional_equal_weight,
             min_daily_volume=param_set.min_daily_volume,
             max_daily_volume=param_set.max_daily_volume,
+            leverage=param_set.leverage,
         )
         pf_portfolio = backtest(
             df_portfolio,
             periods_per_day=periods_per_day,
             initial_capital=initial_capital,
+            leverage=param_set.leverage,
             rebalancing_freq=param_set.rebalancing_freq,
             start_date=start_date,
             end_date=end_date,
@@ -182,15 +187,15 @@ def optimize(
     portfolios = []
     pf_names = []
     for param_set, pf in params_to_pf.items():
-        # if param_set.volatility_target is not None and param_set.volatility_target > 0:
-        #     # Disqualify buffers which are too large, exceeding volatility target
-        #     realized_vol = pf.annualized_volatility()
-        #     if (
-        #         abs(realized_vol - param_set.volatility_target)
-        #         / param_set.volatility_target
-        #         > 0.25
-        #     ):
-        #         continue
+        if param_set.volatility_target is not None and param_set.volatility_target > 0:
+            # Disqualify buffers which are too large, exceeding volatility target
+            realized_vol = get_annualized_volatility(pf)
+            if (
+                abs(realized_vol - param_set.volatility_target)
+                / param_set.volatility_target
+                > 0.25
+            ):
+                continue
         pf_name = param_set.name
         pf_stats = get_stats_of_interest(pf, name=pf_name)
         stats.append(pf_stats)
@@ -215,6 +220,7 @@ def optimize(
                 "Annualized Return [%]",
                 "Annualized Volatility [%]",
                 "Avg Daily Turnover [%]",
+                "Max Gross Exposure [%]",
             ]
         ].head(top)
     )
@@ -476,83 +482,3 @@ def optimize(
 #     best_rebal_idx = best_portfolios_rebal_idx[0]
 #     print(f"Final Params: {opt_res_rebalancing[best_rebal_idx].params}")
 #     return opt_res_rebalancing[best_rebal_idx]
-
-
-def optimize_rebalancing_buffer(
-    df_analysis: pd.DataFrame,
-    periods_per_day: int,
-    generate_positions: Callable,
-    start_date: datetime,
-    end_date: datetime,
-    initial_capital: int,
-    rebalancing_freq: Optional[str],
-    volume_max_size: float,
-    volatility_target: Optional[float],
-    skip_plots: bool,
-):
-    # Generate positions
-    df_portfolio = generate_positions(df_analysis)
-
-    # Optimize value of rebalancing buffer which yields highest net sharpe
-    rebal_buffer_to_pf = {}
-    step_size = 0.0005
-    num_steps = 200
-    for i in range(num_steps):
-        rebalancing_buffer = i * step_size
-        pf_portfolio = backtest(
-            df_portfolio,
-            periods_per_day=periods_per_day,
-            initial_capital=initial_capital,
-            rebalancing_freq=rebalancing_freq,
-            start_date=start_date,
-            end_date=end_date,
-            with_fees=True,
-            volume_max_size=volume_max_size,
-            rebalancing_buffer=rebalancing_buffer,
-            verbose=False,
-        )
-        rebal_buffer_to_pf[rebalancing_buffer] = pf_portfolio
-
-    # Get stats per portfolio
-    stats = []
-    portfolios = []
-    pf_names = []
-    for rebalancing_buffer, pf in rebal_buffer_to_pf.items():
-        if volatility_target is not None:
-            # Disqualify buffers which are too large, exceeding volatility target
-            realized_vol = pf.annualized_volatility()
-            if abs(realized_vol - volatility_target) / volatility_target > 0.25:
-                continue
-        pf_name = f"Rebal Buffer {rebalancing_buffer * 100:.4f}%"
-        pf_stats = get_stats_of_interest(pf, name=pf_name)
-        stats.append(pf_stats)
-        portfolios.append(pf)
-        pf_names.append(pf_name)
-    df_stats = reduce(
-        lambda left, right: pd.merge(left, right, on=["index"], how="outer"),
-        stats,
-    ).set_index("index")
-    df_stats = df_stats.T
-
-    comparison_metric = "Sharpe Ratio"
-    print(
-        df_stats.sort_values(by=[comparison_metric], ascending=[False])[
-            [
-                "Sharpe Ratio",
-                "Total Fees Paid [$]",
-                "Total Trades",
-                "Total Return [%]",
-                "Max Drawdown [%]",
-                "Annualized Return [%]",
-                "Annualized Volatility [%]",
-                "Avg Daily Turnover [%]",
-            ]
-        ].head(25)
-    )
-    print()
-
-    if not skip_plots:
-        # best_portfolios_idx = df_stats.sort_values(
-        #     by=[comparison_metric], ascending=[False]
-        # ).index
-        plot_cumulative_returns(portfolios, pf_names)

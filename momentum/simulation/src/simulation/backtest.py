@@ -4,10 +4,6 @@ import numpy as np
 from typing import List, Callable, Optional
 from numba import njit
 
-from simulation.vbt import (
-    vbt,
-    simulate,
-)
 from core.constants import (
     TIMESTAMP_COL,
     TICKER_COL,
@@ -23,12 +19,16 @@ from position_generation.constants import (
     NUM_OPEN_SHORT_POSITIONS_COL,
     NUM_OPEN_POSITIONS_COL,
 )
+from simulation.vbt import (
+    vbt,
+    simulate,
+    get_returns,
+)
 from simulation.fees import compute_fees, FeeType
 from simulation.stats import (
     get_stats_of_interest,
     get_turnover,
     get_trade_volume,
-    get_num_open_positions,
     display_stats,
     plot_cumulative_returns,
     plot_rolling_returns,
@@ -41,6 +41,7 @@ def backtest(
     df_backtest: pd.DataFrame,
     periods_per_day: int,
     initial_capital: float,
+    leverage: float = 1.0,
     rebalancing_freq: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -116,8 +117,9 @@ def backtest(
         segment_mask=segment_mask,
         direction=vbt.portfolio.enums.Direction.Both,
         fees=0,
-        fixed_fees = 0,
+        fixed_fees=0,
         slippage=0.005,
+        leverage=leverage,
     )
     # fmt: on
     if verbose:
@@ -178,6 +180,7 @@ def backtest(
         fees=dynamic_fees,
         fixed_fees=0,
         slippage=0.005,
+        leverage=leverage,
     )
 
     if verbose:
@@ -188,7 +191,7 @@ def backtest(
         print()
 
         # Plot returns
-        df_returns = portfolio_with_fees.returns().reset_index()
+        df_returns = get_returns(portfolio_with_fees).reset_index()
         df_returns.rename(columns={"group": "Returns"}, inplace=True)
         fig = px.bar(
             df_returns, x=TIMESTAMP_COL, y="Returns", title="Daily Returns [%]"
@@ -216,10 +219,8 @@ def backtest(
         fig.show()
 
         # Plot open positions
-        df_tmp = get_num_open_positions(df_backtest)
         df_tmp = (
-            get_num_open_positions(df_backtest)
-            .groupby([TIMESTAMP_COL])
+            df_backtest.groupby([TIMESTAMP_COL])
             .agg(
                 {
                     NUM_LONG_ASSETS_COL: "max",
@@ -258,6 +259,7 @@ def backtest_crypto(
     start_date: str,
     end_date: str,
     initial_capital: float,
+    leverage: float = 1.0,
     rebalancing_freq: Optional[str] = None,
     volume_max_size: float = DEFAULT_VOLUME_MAX_SIZE,
     rebalancing_buffer: float = DEFAULT_REBALANCING_BUFFER,
@@ -283,6 +285,7 @@ def backtest_crypto(
         df_benchmark,
         periods_per_day=periods_per_day,
         initial_capital=initial_capital,
+        leverage=leverage,
         rebalancing_freq=rebalancing_freq,
         start_date=start_date,
         end_date=end_date,
@@ -295,6 +298,7 @@ def backtest_crypto(
         df_portfolio,
         periods_per_day=periods_per_day,
         initial_capital=initial_capital,
+        leverage=leverage,
         rebalancing_freq=rebalancing_freq,
         start_date=start_date,
         end_date=end_date,

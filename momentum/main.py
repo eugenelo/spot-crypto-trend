@@ -61,12 +61,6 @@ def parse_args():
     parser.add_argument("--timezone", "-t", type=str, help="Timezone", default="UTC")
     parser.add_argument("--params_path", "-p", type=str, help="Params yaml file path")
     parser.add_argument(
-        "--optimize_params_path",
-        "-op",
-        type=str,
-        help="Optimization params yaml file path",
-    )
-    parser.add_argument(
         "--rebalancing_freq", "-r", type=str, help="Rebalancing frequency"
     )
     parser.add_argument(
@@ -77,9 +71,9 @@ def parse_args():
 
 
 def get_signal_type(params: dict) -> SignalType:
-    if params["generate_positions"] == "v1":
+    if params["signal"] == "v1":
         return SignalType.HistoricalReturns
-    elif params["generate_positions"] == "rohrbach":
+    elif params["signal"].startswith("rohrbach"):
         return SignalType.Rohrbach
     raise ValueError(
         f"Unsupported 'generate_positions' argument: {params['generate_positions']}"
@@ -87,23 +81,18 @@ def get_signal_type(params: dict) -> SignalType:
 
 
 def get_generate_positions(params: dict, periods_per_day: int) -> Callable:
-    if params["generate_positions"] == "v1":
+    if params["signal"] == "v1":
         v1_params = params["params"]
         generate_positions_fn = lambda df: generate_positions_v1(df, params=v1_params)
-    elif params["generate_positions"] == "rohrbach":
-        rohrbach_params = params["params"]
-        if rohrbach_params["response_fn"] == "exponential":
-            signal = "trend_signal"
-        elif rohrbach_params["response_fn"] == "sigmoid":
-            signal = "trend_signal_sigmoid"
-        else:
-            raise ValueError("Invalid response_fn")
+    elif params["signal"].startswith("rohrbach"):
+        signal = params["signal"]
         direction = Direction(params["direction"])
         volatility_target = params.get("volatility_target", None)
         cross_sectional_percentage = params.get("cross_sectional_percentage", None)
         cross_sectional_equal_weight = params.get("cross_sectional_equal_weight", False)
         min_daily_volume = params.get("min_daily_volume", None)
         max_daily_volume = params.get("max_daily_volume", None)
+        leverage = params.get("leverage", 1.0)
         generate_positions_fn = lambda df: generate_positions(
             df,
             signal=signal,
@@ -114,6 +103,7 @@ def get_generate_positions(params: dict, periods_per_day: int) -> Callable:
             cross_sectional_equal_weight=cross_sectional_equal_weight,
             min_daily_volume=min_daily_volume,
             max_daily_volume=max_daily_volume,
+            leverage=leverage,
         )
     else:
         raise ValueError(
@@ -167,11 +157,8 @@ if __name__ == "__main__":
         with open(args.params_path, "r") as yaml_file:
             params = yaml.safe_load(yaml_file)
         print(f"Loaded params: {params}")
-    optimize_params = {}
-    if args.optimize_params_path is not None:
-        with open(args.optimize_params_path, "r") as yaml_file:
-            optimize_params = yaml.safe_load(yaml_file)
-        print(f"Loaded optimize_params: {optimize_params}")
+    assert "signal" in params, "Signal should be specified in params!"
+    generate_positions_fn = get_generate_positions(params, periods_per_day)
 
     # Create signals
     if args.mode == "analysis" or args.mode == "simulation":
@@ -229,9 +216,8 @@ if __name__ == "__main__":
     elif args.mode == "backtest":
         # Get position and benchmark generation functions
         assert (
-            "generate_positions" in params and "generate_benchmark" in params
-        ), "Position/Benchmark Generation functions should be specified in params!"
-        generate_positions_fn = get_generate_positions(params, periods_per_day)
+            "generate_benchmark" in params
+        ), "Benchmark generation function should be specified in params for backtest!"
         generate_benchmark_fn = get_generate_benchmark(params)
 
         backtest_crypto(
@@ -243,6 +229,7 @@ if __name__ == "__main__":
             end_date=end_date,
             rebalancing_freq=rebalancing_freq,
             initial_capital=args.initial_capital,
+            leverage=params.get("leverage", 1.0),
             volume_max_size=volume_max_size,
             rebalancing_buffer=rebalancing_buffer,
             skip_plots=args.skip_plots,
@@ -251,32 +238,14 @@ if __name__ == "__main__":
         optimize(
             df_analysis,
             periods_per_day=periods_per_day,
-            optimize_params=optimize_params,
+            optimize_params=params,
             start_date=start_date,
             end_date=end_date,
             initial_capital=args.initial_capital,
             volume_max_size=volume_max_size,
             skip_plots=args.skip_plots,
         )
-        # optimize_rebalancing_buffer(
-        #     df_analysis,
-        #     periods_per_day=periods_per_day,
-        #     generate_positions=generate_positions_fn,
-        #     start_date=start_date,
-        #     end_date=end_date,
-        #     initial_capital=args.initial_capital,
-        #     rebalancing_freq=rebalancing_freq,
-        #     volume_max_size=volume_max_size,
-        #     volatility_target=params.get("volatility_target", None),
-        #     skip_plots=args.skip_plots,
-        # )
     elif args.mode == "positions":
-        # Get position generation function
-        assert (
-            "generate_positions" in params
-        ), "Position Generation function should be specified in params!"
-        generate_positions_fn = get_generate_positions(params, periods_per_day)
-
         positions = generate_positions_fn(df_analysis)
         nonempty_positions = nonempty_positions(positions, timestamp=end_date)
         print(nonempty_positions)

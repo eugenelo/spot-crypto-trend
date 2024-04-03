@@ -5,7 +5,7 @@ from scipy import stats
 
 def analysis(
     df_analysis: pd.DataFrame,
-    feature: str = "trend_signal",
+    feature: str = "rohrbach_exponential",
     target: str = "next_7d_log_returns",
     bin_feature: str = "trend_decile",
 ):

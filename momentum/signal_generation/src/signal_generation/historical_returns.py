@@ -29,7 +29,7 @@ def create_historical_return_signals(
             df, column=PRICE_COL_SIGNAL_GEN, periods=periods
         )
     # Calculate annualized volatility on returns
-    for lookback_days in [30, 365]:
+    for lookback_days in [30, 182, 365]:
         periods = lookback_days * periods_per_day
         df[f"returns_{lookback_days}d_vol"] = volatility_ema(
             df, column="returns", periods=periods

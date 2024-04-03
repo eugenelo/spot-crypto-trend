@@ -1,8 +1,13 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
-from typing import Optional, List
+from typing import Optional
+import static_frame as sf
 
+from position_generation.diversification_multipliers import (
+    compute_idm,
+    compute_fdm,
+    vol_target_scaling_dm,
+)
 from position_generation.utils import Direction
 from position_generation.constants import (
     VOL_SHORT_COL,
@@ -23,6 +28,9 @@ from position_generation.constants import (
     NUM_LONG_ASSETS_COL,
     NUM_SHORT_ASSETS_COL,
     NUM_KEPT_ASSETS_COL,
+    NUM_OPEN_LONG_POSITIONS_COL,
+    NUM_OPEN_SHORT_POSITIONS_COL,
+    NUM_OPEN_POSITIONS_COL,
     MAX_ABS_POSITION_SIZE_COL,
     IDM_REFRESH_PERIOD,
 )
@@ -46,6 +54,7 @@ def generate_positions(
     cross_sectional_equal_weight: Optional[bool],
     min_daily_volume: Optional[float],
     max_daily_volume: Optional[float],
+    leverage: float,
 ) -> pd.DataFrame:
     # Ensure that no duplicate rows exist for (ticker, timestamp) combination
     assert not df.duplicated(subset=[TICKER_COL, TIMESTAMP_COL], keep=False).any()
@@ -77,12 +86,35 @@ def generate_positions(
 
     # Get number of investable assets in universe per timestamp. Assets which are filtered out
     # from consideration are denoted by np.nan values.
-    df[NUM_UNIQUE_ASSETS_COL] = generate_num_unique_assets(df)
+    df[NUM_UNIQUE_ASSETS_COL] = get_num_unique_assets(df)
 
     # Compute diversification multipliers. This comes after all filters have been applied.
-    idm_ser = compute_idm(df, feature_column=PAST_7D_RETURNS_COL)
+    # Use static frames to hash results for identical inputs.
+    idm_cols = [TIMESTAMP_COL, TICKER_COL, SCALED_SIGNAL_COL]
+    idm_df = sf.FrameHE.from_pandas(df[idm_cols])
+    returns_matrix = sf.FrameHE.from_pandas(
+        pd.pivot_table(
+            df,
+            index=TIMESTAMP_COL,
+            columns=TICKER_COL,
+            values=PAST_7D_RETURNS_COL,
+            dropna=False,
+        ).reset_index()
+    )
+    full_date_range = sf.SeriesHE(
+        df.sort_values(TIMESTAMP_COL, ascending=True)[TIMESTAMP_COL]
+        .unique()
+        .to_pydatetime()
+    )
+    idm_ser = compute_idm(
+        idm_df, feature_mat=returns_matrix, date_range=full_date_range
+    )
     idm_30d_ema = idm_ser.ewm(span=30, adjust=True, ignore_na=False).mean()
-    fdm_ser = compute_idm(df, feature_column=signal)
+    fdm_feature_cols = [f"u_{k}" for k in range(5)]
+    fdm_df = sf.FrameHE.from_pandas(df[idm_cols + fdm_feature_cols])
+    fdm_ser = compute_fdm(
+        fdm_df, feature_columns=tuple(fdm_feature_cols), date_range=full_date_range
+    )
     fdm_30d_ema = fdm_ser.ewm(span=30, adjust=True, ignore_na=False).mean()
     dm_combined_ser = idm_ser * fdm_ser
     dm_30d_ema = dm_combined_ser.ewm(span=30, adjust=True, ignore_na=False).mean()
@@ -128,18 +160,23 @@ def generate_positions(
     df = apply_direction_constraint(df, signal=SCALED_SIGNAL_COL, direction=direction)
 
     # Position sizing
+    df = get_num_open_positions(df)
     if volatility_target is not None:
+        vol_target_scaling = vol_target_scaling_dm(volatility_target)
         # Volatility targeting
-        df[VOL_TARGET_COL] = volatility_target / df[NUM_KEPT_ASSETS_COL]
+        df[VOL_TARGET_COL] = (
+            volatility_target / df[NUM_KEPT_ASSETS_COL] * vol_target_scaling
+        )
+        # df[VOL_TARGET_COL] = volatility_target / df[NUM_OPEN_POSITIONS_COL]
         df[POSITION_SCALING_FACTOR_COL] = df[VOL_TARGET_COL] / df[VOL_FORECAST_COL]
     else:
         # Scale in proportion to signal and number of assets in universe.
-        df[POSITION_SCALING_FACTOR_COL] = 1 / df[NUM_KEPT_ASSETS_COL]
+        df[POSITION_SCALING_FACTOR_COL] = 1 / df[NUM_OPEN_POSITIONS_COL]
     df[POSITION_SCALING_FACTOR_COL] *= df[DM_30D_EMA_COL]
     df[POSITION_COL] = df[SCALED_SIGNAL_COL] * df[POSITION_SCALING_FACTOR_COL]
 
     # Leverage constraints + Cap wild sizing from very low volatility estimates
-    df = cap_position_size(df, direction=direction, leverage=3)
+    df = cap_position_size(df, direction=direction, leverage=leverage)
 
     # Lag positions by one day, avoid cheating w/ future information
     df[POSITION_COL] = df[POSITION_COL].shift(1)
@@ -179,12 +216,26 @@ def generate_signal_rank(df: pd.DataFrame, signal: str) -> pd.Series:
     )
 
 
-def generate_num_unique_assets(df: pd.DataFrame) -> pd.Series:
+def get_num_unique_assets(df: pd.DataFrame) -> pd.Series:
     return (
         df.loc[~df[SCALED_SIGNAL_COL].isna()]
         .groupby(TIMESTAMP_COL)[TICKER_COL]
         .transform(pd.Series.nunique)
     )
+
+
+def get_num_open_positions(df: pd.DataFrame) -> pd.DataFrame:
+    # Log open positions
+    df[NUM_OPEN_LONG_POSITIONS_COL] = df.groupby(TIMESTAMP_COL)[
+        SCALED_SIGNAL_COL
+    ].transform(lambda x: (x > 0).sum())
+    df[NUM_OPEN_SHORT_POSITIONS_COL] = df.groupby(TIMESTAMP_COL)[
+        SCALED_SIGNAL_COL
+    ].transform(lambda x: (x < 0).sum())
+    df[NUM_OPEN_POSITIONS_COL] = (
+        df[NUM_OPEN_LONG_POSITIONS_COL] + df[NUM_OPEN_SHORT_POSITIONS_COL]
+    )
+    return df
 
 
 def apply_cross_sectional_filter(
@@ -261,62 +312,3 @@ def cap_position_size(
         df[MAX_ABS_POSITION_SIZE_COL],
     )
     return df
-
-
-def generate_correlation_matrix(df: pd.DataFrame, column: str) -> pd.DataFrame:
-    feature_mat = pd.pivot_table(
-        df,
-        index=TIMESTAMP_COL,
-        columns=TICKER_COL,
-        values=column,
-        dropna=False,
-        fill_value=0.0,
-    )
-    return feature_mat.corr()
-
-
-def compute_idm(df: pd.DataFrame, feature_column: str) -> pd.Series:
-    feature_mat = pd.pivot_table(
-        df,
-        index=TIMESTAMP_COL,
-        columns=TICKER_COL,
-        values=feature_column,
-        dropna=False,
-    )
-    full_date_range = df.sort_values(by=TIMESTAMP_COL, ascending=True)[
-        TIMESTAMP_COL
-    ].unique()
-    last_stamp_updated = None
-    idm_lst = []
-    for timestamp in full_date_range:
-        timestamp_mask = df[TIMESTAMP_COL] == timestamp
-        valid_signal_mask = ~df[SCALED_SIGNAL_COL].isna()
-        tickers = df.loc[(timestamp_mask) & (valid_signal_mask)][TICKER_COL]
-        if tickers.shape[0] == 0:
-            # No valid positions
-            idm_lst.append(np.nan)
-            continue
-
-        if (
-            last_stamp_updated is None
-            or (timestamp - last_stamp_updated) > IDM_REFRESH_PERIOD
-        ):
-            # Equal weight across all assets (risk parity)
-            weights = np.full(tickers.shape, fill_value=1 / tickers.shape[0])
-            # Replace negative correlations with 0
-            corr = (
-                feature_mat.loc[feature_mat.index <= timestamp][tickers]
-                .corr()
-                .fillna(value=0)
-                .to_numpy()
-            )
-            corr = np.clip(corr, 0, 1)
-            idm_divisor = np.sqrt(weights.dot(corr).dot(weights.T))
-            idm = 1 / idm_divisor if idm_divisor > 0 else np.nan
-            last_stamp_updated = timestamp
-        else:
-            # Reuse previous idm
-            idm = idm_lst[-1]
-        idm_lst.append(idm)
-    idm_ser = pd.Series(idm_lst, index=full_date_range, name=IDM_COL)
-    return idm_ser

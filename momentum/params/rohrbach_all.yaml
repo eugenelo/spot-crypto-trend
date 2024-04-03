@@ -1,53 +1,33 @@
-generate_positions: rohrbach
 generate_benchmark: btc
-rebalancing_freq: null
-volume_max_size: 0.01
-rebalancing_buffer: 0.002
-volatility_target: 0.35  # 35% annualized
-cross_sectional_percentage: null  # Keep entire universe
-cross_sectional_equal_weight: False # If true, long top bin w/ equal weight & short bottom bin w/ equal weight
-direction: LongOnly
-min_daily_volume: 10000  # Minimum avg daily volume [USD]
-max_daily_volume: null  # Maximum avg daily volume [USD]
 
-params:
-  response_fn: exponential
+signal: rohrbach_exponential
+direction: LongOnly
+rebalancing_freq: null
+rebalancing_buffer: 0.002
+volatility_target: 0.40
+cross_sectional_percentage: null
+cross_sectional_equal_weight: False
+min_daily_volume: 5000000  # Minimum avg daily volume [USD]
+max_daily_volume: null  # Maximum avg daily volume [USD]
+with_fees: True
+leverage: 2.0
 
 # ema_window_pairs = [(4, 12), (8, 24), (16, 48), (32, 96), (64, 192)]
 #                                            Benchmark                pf_Strategy
 # index
-# Annualized Return [%]                          53.44                      41.67
-# Annualized Volatility [%]                      64.29                      35.82
-# Sharpe Ratio                                    0.99                       1.15
-# Sortino Ratio                                   1.46                       1.66
-# Max Drawdown [%]                               76.23                      55.98
+# Annualized Return [%]                          53.47                      65.99
+# Annualized Volatility [%]                      54.24                      37.75
+# Sharpe Ratio                                    1.06                       1.53
+# Sortino Ratio                                   1.53                       2.14
+# Max Drawdown [%]                               75.76                      50.96
 # Max Drawdown Duration              783 days 00:00:00          783 days 00:00:00
-# Max Gross Exposure [%]                         99.16                      100.0
-# Win Rate [%]                                     NaN                      37.88
-# Start                      2020-01-01 00:00:00-05:00  2020-01-01 00:00:00-05:00
-# End                        2023-12-31 00:00:00-05:00  2023-12-31 00:00:00-05:00
-# Start Value [$]                              10000.0                    10000.0
-# End Value [$]                               55497.37                   40315.27
-# Total Return [%]                              454.97                     303.15
-# Total Trades                                       1                      11974
-# Total Fees Paid [$]                            36.87                    5855.43
-# Avg. Fee per Trade [$]                         36.87                       0.49
-
-#                                            Benchmark                pf_Strategy
-# index
-# Annualized Return [%]                          53.04                      41.91
-# Annualized Volatility [%]                      64.25                      31.33
-# Sharpe Ratio                                    0.98                       1.28
-# Sortino Ratio                                   1.46                       1.82
-# Max Drawdown [%]                               76.23                      42.93
-# Max Drawdown Duration              783 days 00:00:00          783 days 00:00:00
-# Max Gross Exposure [%]                         99.16                      78.09
-# Win Rate [%]                                     NaN                      32.28
-# Start                      2020-01-01 00:00:00-05:00  2020-01-01 00:00:00-05:00
-# End                        2023-12-31 00:00:00-05:00  2023-12-31 00:00:00-05:00
-# Start Value [$]                            1000000.0                  1000000.0
-# End Value [$]                             5491649.88                 4059074.21
-# Total Return [%]                              449.16                     305.91
-# Total Trades                                       1                      14019
-# Total Fees Paid [$]                          1756.17                  146961.04
-# Avg. Fee per Trade [$]                       1756.17                      10.48
+# Max Gross Exposure [%]                          99.2                     117.74
+# Win Rate [%]                                     NaN                      33.53
+# Start                      2020-01-01 00:00:00+00:00  2020-01-01 00:00:00+00:00
+# End                        2023-12-31 00:00:00+00:00  2023-12-31 00:00:00+00:00
+# Start Value [$]                              50000.0                    50000.0
+# End Value [$]                              277680.43                  380094.73
+# Total Return [%]                              455.36                     660.19
+# Total Trades                                       1                      13363
+# Total Fees Paid [$]                           162.69                   15223.51
+# Avg. Fee per Trade [$]                        162.69                       1.14

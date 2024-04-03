@@ -18,6 +18,7 @@ from simulation.vbt import (
     get_value,
     get_final_value,
     get_returns,
+    get_cumulative_returns,
     get_annualized_return,
     get_annualized_volatility,
 )
@@ -104,21 +105,6 @@ def get_trade_volume(pf_portfolio: vbt.Portfolio) -> pd.Series:
     return trade_volume
 
 
-def get_num_open_positions(df: pd.DataFrame) -> pd.DataFrame:
-    # Log open positions
-    df[NUM_OPEN_LONG_POSITIONS_COL] = df.groupby(TIMESTAMP_COL)[POSITION_COL].transform(
-        lambda x: (x > 0).sum()
-    )
-    df[NUM_OPEN_SHORT_POSITIONS_COL] = df.groupby(TIMESTAMP_COL)[
-        POSITION_COL
-    ].transform(lambda x: (x < 0).sum())
-    df[NUM_OPEN_POSITIONS_COL] = (
-        df[NUM_OPEN_LONG_POSITIONS_COL] + df[NUM_OPEN_SHORT_POSITIONS_COL]
-    )
-
-    return df
-
-
 def display_stats(portfolios: List[vbt.Portfolio], portfolio_names: List[str]):
     # Display Stats for all portfolios
     stats = []
@@ -158,7 +144,7 @@ def plot_cumulative_returns(
     cumulative_returns = []
     first_pf_cumulative = None
     for i, pf in enumerate(portfolios):
-        df_cumulative = pf.cumulative_returns().reset_index()
+        df_cumulative = get_cumulative_returns(pf).reset_index()
         df_cumulative.rename(columns={"group": portfolio_names[i]}, inplace=True)
 
         # Reindex cumulative returns to be consistent with the first portfolio's index
@@ -197,7 +183,7 @@ def plot_rolling_returns(
     returns = []
     first_pf_returns = None
     for i, pf in enumerate(portfolios):
-        pf_returns = pf.returns().reset_index()
+        pf_returns = get_returns(pf).reset_index()
         pf_returns.rename(columns={"group": portfolio_names[i]}, inplace=True)
 
         # Reindex returns to be consistent with the first portfolio's index

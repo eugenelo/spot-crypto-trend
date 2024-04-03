@@ -30,6 +30,10 @@ def get_returns(pf: vbt.Portfolio):
     return pf.returns
 
 
+def get_cumulative_returns(pf: vbt.Portfolio):
+    return pf.cumulative_returns
+
+
 def get_annualized_return(pf: vbt.Portfolio):
     return pf.annualized_return
 

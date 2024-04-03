@@ -15,7 +15,7 @@ class TestGenerateParameterSets(unittest.TestCase):
     def test_invalid_spec(self):
         # Invalid use of dictionary
         optimize_params = {
-            "signal": "trend_signal",
+            "signal": "rohrbach_exponential",
             "direction": "LongOnly",
             "volatility_target": {"invalid_key": "invalid_value"},
         }
@@ -24,7 +24,7 @@ class TestGenerateParameterSets(unittest.TestCase):
 
     def test_nominal(self):
         optimize_params = {
-            "signal": "trend_signal",
+            "signal": "rohrbach_exponential",
             "direction": "LongOnly",
             "volatility_target": {
                 "step_size": 0.05,

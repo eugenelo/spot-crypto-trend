@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from numba import njit
+from typing import Optional
 
 import vectorbt as vbt
 from vectorbt.base.reshape_fns import flex_select_auto_nb
@@ -134,12 +135,17 @@ def simulate(
     volume_max_size: float,
     rebalancing_buffer: float,
     initial_capital: float,
-    segment_mask: int = None,
+    segment_mask: Optional[int] = None,
     direction: Direction = Direction.LongOnly,
     fees: float = 0.0,
     fixed_fees: float = 0.0,
     slippage: float = 0.0,
+    leverage: float = 1.0,
+    leverage_mode: Optional[LeverageMode] = None,
 ) -> vbt.Portfolio:
+    if leverage is not None:
+        print("Leverage is not supported by vectorbt, ignoring!")
+
     size_np = positions.to_numpy()
     volume_np = volume.to_numpy()
     # fmt: off

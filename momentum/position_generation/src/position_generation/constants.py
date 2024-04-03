@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 VOL_SHORT_COL = "returns_30d_vol"
-VOL_LONG_COL = "returns_365d_vol"
+VOL_LONG_COL = "returns_182d_vol"
 VOL_FORECAST_COL = "vol_forecast"
 VOL_TARGET_COL = "volatility_target"
 

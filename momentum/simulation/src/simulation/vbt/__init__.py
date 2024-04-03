@@ -10,6 +10,7 @@ from simulation.vbt.vbtpro.api import (
     get_value,
     get_final_value,
     get_returns,
+    get_cumulative_returns,
     get_annualized_return,
     get_annualized_volatility,
 )

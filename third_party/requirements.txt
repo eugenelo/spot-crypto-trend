@@ -17,3 +17,4 @@ jupyterlab==4.1.5
 notebook==6.5.6
 TA-Lib==0.4.28
 vectorbtpro[base] @ git+https://${VECTORBT_TOKEN}@github.com/polakowo/vectorbt.pro.git@v2024.4.1
+static-frame==2.5.1

@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from numba import njit
+from typing import Optional
 
 import vectorbtpro as vbt
 from vectorbtpro.base.flex_indexing import flex_select_nb
@@ -8,6 +9,7 @@ from vectorbtpro.portfolio.enums import (
     SizeType,
     Direction,
     NoOrder,
+    LeverageMode,
 )
 
 from core.utils_nb import clip_nb
@@ -45,6 +47,8 @@ def order_func_nb(
     fees,
     fixed_fees,
     slippage,
+    leverage,
+    leverage_mode,
     volume_max_size: float,
     rebalancing_buffer: float,
 ):
@@ -121,6 +125,8 @@ def order_func_nb(
         fees=vbt.pf_nb.select_nb(c, fees),
         fixed_fees=vbt.pf_nb.select_nb(c, fixed_fees),
         slippage=vbt.pf_nb.select_nb(c, slippage),
+        leverage=vbt.pf_nb.select_nb(c, leverage),
+        leverage_mode=vbt.pf_nb.select_nb(c, leverage_mode),
     )
 
 
@@ -131,11 +137,13 @@ def simulate(
     volume_max_size: float,
     rebalancing_buffer: float,
     initial_capital: float,
-    segment_mask: int = None,
+    segment_mask: Optional[int] = None,
     direction: Direction = Direction.LongOnly,
     fees: float = 0.0,
     fixed_fees: float = 0.0,
     slippage: float = 0.0,
+    leverage: float = 1.0,
+    leverage_mode: LeverageMode = LeverageMode.Lazy,
 ) -> vbt.Portfolio:
     size_np = positions.to_numpy()
     volume_np = volume.to_numpy()
@@ -143,13 +151,19 @@ def simulate(
     pf = vbt.Portfolio.from_order_func(
         price,
         order_func_nb=order_func_nb,
-        # Args for order_func_nb
         order_args = (
-            size_np, volume_np, vbt.Rep('size_type'), vbt.Rep('direction'),
-            vbt.Rep('fees'), vbt.Rep('fixed_fees'), vbt.Rep('slippage'),
-            volume_max_size, rebalancing_buffer,
+            size_np,
+            volume_np,
+            vbt.Rep('size_type'),
+            vbt.Rep('direction'),
+            vbt.Rep('fees'),
+            vbt.Rep('fixed_fees'),
+            vbt.Rep('slippage'),
+            vbt.Rep('leverage'),
+            vbt.Rep('leverage_mode'),
+            volume_max_size,
+            rebalancing_buffer,
         ),
-        # Kwargs
         pre_group_func_nb=pre_group_func_nb,
         pre_segment_func_nb=pre_segment_func_nb,
         pre_segment_args=(
@@ -165,6 +179,8 @@ def simulate(
             fees=fees,
             fixed_fees=fixed_fees,
             slippage=slippage,
+            leverage=leverage,
+            leverage_mode=leverage_mode,
         ),
         init_cash=initial_capital,
         cash_sharing=True,

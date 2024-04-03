@@ -66,20 +66,20 @@ def create_rohrbach_signals(
         df_signals[f"u_{k}_sigmoid"] = 2 / (1 + np.exp(-df_signals[f"z_{k}"])) - 1
 
     # Calculate weighted signal
-    df_signals["trend_signal"] = 0
-    df_signals["trend_signal_sigmoid"] = 0
+    df_signals["rohrbach_exponential"] = 0
+    df_signals["rohrbach_sigmoid"] = 0
     weight = 1 / len(ema_window_pairs)
     for k in range(len(ema_window_pairs)):
-        df_signals["trend_signal"] += df_signals[f"u_{k}"] * weight
-        df_signals["trend_signal_sigmoid"] += df_signals[f"u_{k}_sigmoid"] * weight
+        df_signals["rohrbach_exponential"] += df_signals[f"u_{k}"] * weight
+        df_signals["rohrbach_sigmoid"] += df_signals[f"u_{k}_sigmoid"] * weight
 
     # Calculate deciles
     try:
         df_signals["trend_decile"] = bins(
-            df_signals, column="trend_signal", num_bins=10
+            df_signals, column="rohrbach_exponential", num_bins=10
         )
         df_signals["trend_sigmoid_decile"] = bins(
-            df_signals, column="trend_signal_sigmoid", num_bins=10
+            df_signals, column="rohrbach_sigmoid", num_bins=10
         )
     except Exception:
         df_signals["trend_decile"] = np.nan
