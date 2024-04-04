@@ -3,8 +3,18 @@ import pytz
 import re
 from typing import Callable
 
-from data.constants import OHLC_COLUMNS
-from core.utils import filter_universe
+from data.constants import (
+    TIMESTAMP_COL,
+    OPEN_COL,
+    HIGH_COL,
+    LOW_COL,
+    CLOSE_COL,
+    VWAP_COL,
+    VOLUME_COL,
+    DOLLAR_VOLUME_COL,
+    TICKER_COL,
+    OHLC_COLUMNS,
+)
 
 
 def load_ohlc_to_daily_filtered(
@@ -32,27 +42,32 @@ def load_ohlc_to_hourly_filtered(
 
 
 def load_ohlc_csv(input_path: str) -> pd.DataFrame:
-    df = pd.read_csv(input_path, parse_dates=["timestamp"])[OHLC_COLUMNS]
-    df.index = pd.to_datetime(df.pop("timestamp"), utc=True, format="mixed")
+    df = pd.read_csv(input_path, parse_dates=[TIMESTAMP_COL])[OHLC_COLUMNS]
+    df.index = pd.to_datetime(df.pop(TIMESTAMP_COL), utc=True, format="mixed")
     return df
 
 
 def validate_data(df: pd.DataFrame, freq: str) -> bool:
     # Ensure that no duplicate rows exist for (ticker, timestamp) combination
-    duplicate = df.duplicated(subset=["ticker", "timestamp"], keep=False)
+    duplicate = df.duplicated(subset=[TICKER_COL, TIMESTAMP_COL], keep=False)
     assert not duplicate.any(), df.loc[duplicate]
 
     # Ensure that no gaps exist between dates
-    tickers = df["ticker"].unique()
+    tickers = df[TICKER_COL].unique()
     for ticker in tickers:
-        df_ticker = df.loc[df["ticker"] == ticker]
-        start_date = df_ticker["timestamp"].min()  # Start of your data
-        end_date = df_ticker["timestamp"].max()  # End of your data
+        df_ticker = df.loc[df[TICKER_COL] == ticker]
+        start_date = df_ticker[TIMESTAMP_COL].min()  # Start of your data
+        end_date = df_ticker[TIMESTAMP_COL].max()  # End of your data
         full_date_range = pd.date_range(start=start_date, end=end_date, freq=freq)
-        missing_dates = full_date_range.difference(df_ticker["timestamp"])
+        missing_dates = full_date_range.difference(df_ticker[TIMESTAMP_COL])
         assert missing_dates.empty, f"{ticker}: {missing_dates}"
 
     return True
+
+
+def filter_universe(df: pd.DataFrame, whitelist_fn: Callable) -> pd.DataFrame:
+    df_filtered = df.loc[df[TICKER_COL].apply(whitelist_fn)]
+    return df_filtered
 
 
 def _load_ohlc_to_dataframe_filtered(
@@ -94,7 +109,7 @@ def _load_ohlc_to_dataframe_filtered(
         )
 
     df = df.reset_index()
-    df = df.sort_values(by=["ticker", "timestamp"], ascending=True)
+    df = df.sort_values(by=[TICKER_COL, TIMESTAMP_COL], ascending=True)
     if resampled_data:
         # Fill dates with no data using the previous day. Volume will still be 0.
         df = df.ffill()
@@ -111,21 +126,21 @@ def _load_ohlc_to_dataframe_filtered(
 def _resample_ohlc_hour_to_day(df_hourly: pd.DataFrame) -> pd.DataFrame:
     # Convert hourly to daily OHLC
     df_daily = (
-        df_hourly.groupby("ticker")
+        df_hourly.groupby(TICKER_COL)
         .resample("D")
         .agg(
             {
-                "open": "first",
-                "high": "max",
-                "low": "min",
-                "close": "last",
-                "volume": "sum",
-                "dollar_volume": "sum",
+                OPEN_COL: "first",
+                HIGH_COL: "max",
+                LOW_COL: "min",
+                CLOSE_COL: "last",
+                VOLUME_COL: "sum",
+                DOLLAR_VOLUME_COL: "sum",
             }
         )
         .reset_index()
     )
-    df_daily["vwap"] = df_daily["dollar_volume"] / df_daily["volume"]
-    df_daily["timestamp"] = pd.to_datetime(df_daily["timestamp"])
-    df_daily = df_daily.sort_values(by=["ticker", "timestamp"])
+    df_daily[VWAP_COL] = df_daily[DOLLAR_VOLUME_COL] / df_daily[VOLUME_COL]
+    df_daily[TIMESTAMP_COL] = pd.to_datetime(df_daily[TIMESTAMP_COL])
+    df_daily = df_daily.sort_values(by=[TICKER_COL, TIMESTAMP_COL])
     return df_daily

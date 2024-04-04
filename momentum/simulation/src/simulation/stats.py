@@ -3,7 +3,8 @@ import pandas as pd
 from typing import List
 from functools import reduce
 
-from core.constants import TIMESTAMP_COL, POSITION_COL
+from data.constants import TIMESTAMP_COL
+from core.constants import POSITION_COL
 from position_generation.constants import (
     NUM_OPEN_LONG_POSITIONS_COL,
     NUM_OPEN_SHORT_POSITIONS_COL,

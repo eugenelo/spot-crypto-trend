@@ -10,8 +10,19 @@ import pytz
 
 import sys
 
-from data.utils import load_ohlc_to_daily_filtered, load_ohlc_to_hourly_filtered
-from data.constants import OHLC_COLUMNS
+from data.utils import (
+    load_ohlc_to_daily_filtered,
+    load_ohlc_to_hourly_filtered,
+    filter_universe,
+)
+from data.constants import (
+    TIMESTAMP_COL,
+    TICKER_COL,
+    VWAP_COL,
+    VOLUME_COL,
+    DOLLAR_VOLUME_COL,
+    OHLC_COLUMNS,
+)
 from position_generation.v1 import (
     generate_positions_v1,
 )
@@ -20,10 +31,7 @@ from position_generation.utils import (
 )
 from signal_generation.signal_generation import create_trading_signals
 from signal_generation.constants import SignalType
-from core.utils import filter_universe
 from core.constants import (
-    TIMESTAMP_COL,
-    TICKER_COL,
     POSITION_COL,
     in_universe_excl_stablecoins,
 )
@@ -131,9 +139,9 @@ def fetch_data(
     for symbol, ohlcv in ohlcvs.items():
         df = pd.DataFrame(
             ohlcv,
-            columns=[TIMESTAMP_COL, "open", "high", "low", "close", "vwap", "volume"],
+            columns=OHLC_COLUMNS[:-2],
         )
-        df["dollar_volume"] = df["vwap"] * df["volume"]
+        df[DOLLAR_VOLUME_COL] = df[VWAP_COL] * df[VOLUME_COL]
         df[TIMESTAMP_COL] = pd.to_datetime(df[TIMESTAMP_COL], utc=True, unit="ms")
         df[TICKER_COL] = symbol
         ohlc_combined = pd.concat([ohlc_combined, df], ignore_index=True)

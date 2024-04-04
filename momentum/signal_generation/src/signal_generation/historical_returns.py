@@ -10,6 +10,7 @@ from signal_generation.common import (
     volatility_ema,
     bins,
 )
+from data.constants import TIMESTAMP_COL
 from core.constants import PRICE_COL_SIGNAL_GEN
 
 
@@ -53,8 +54,8 @@ def create_historical_return_signals(
         df[decile_colname] = bins(df, column=logret_colname, num_bins=10)
 
     # Add helper cols
-    df["day"] = pd.DatetimeIndex(df["timestamp"]).day
-    df["month"] = pd.DatetimeIndex(df["timestamp"]).month
-    df["year"] = pd.DatetimeIndex(df["timestamp"]).year
+    df["day"] = pd.DatetimeIndex(df[TIMESTAMP_COL]).day
+    df["month"] = pd.DatetimeIndex(df[TIMESTAMP_COL]).month
+    df["year"] = pd.DatetimeIndex(df[TIMESTAMP_COL]).year
 
     return df

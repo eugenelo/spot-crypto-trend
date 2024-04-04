@@ -6,6 +6,19 @@ from typing import Optional, List
 import datetime
 import glob
 
+from data.constants import (
+    TIMESTAMP_COL,
+    OPEN_COL,
+    HIGH_COL,
+    LOW_COL,
+    CLOSE_COL,
+    VWAP_COL,
+    VOLUME_COL,
+    DOLLAR_VOLUME_COL,
+    TICKER_COL,
+    PRICE_COL,
+)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Convert tick data to OHLC data")
@@ -48,23 +61,25 @@ def tick_to_ohlc(
     """
     # Convert tick data to DataFrame
     df_tick = pl.read_csv(
-        input_path, has_header=False, new_columns=["timestamp", "price", "volume"]
+        input_path, has_header=False, new_columns=[TIMESTAMP_COL, PRICE_COL, VOLUME_COL]
     )
-    df_tick = df_tick.with_columns(dollar_volume=pl.col("price") * pl.col("volume"))
+    df_tick = df_tick.with_columns(dollar_volume=pl.col(PRICE_COL) * pl.col(VOLUME_COL))
 
     # Convert timestamp column to datetime
     df_tick = df_tick.with_columns(
-        pl.col("timestamp").map_elements(
+        pl.col(TIMESTAMP_COL).map_elements(
             lambda x: datetime.datetime.utcfromtimestamp(x)
         )
-    ).sort("timestamp")
+    ).sort(TIMESTAMP_COL)
 
     if start is not None:
         # Filter on start
-        df_tick = df_tick.filter(pl.col("timestamp") >= pd.to_datetime(start, utc=True))
+        df_tick = df_tick.filter(
+            pl.col(TIMESTAMP_COL) >= pd.to_datetime(start, utc=True)
+        )
     if end is not None:
         # Filter on start
-        df_tick = df_tick.filter(pl.col("timestamp") <= pd.to_datetime(end, utc=True))
+        df_tick = df_tick.filter(pl.col(TIMESTAMP_COL) <= pd.to_datetime(end, utc=True))
 
     print(f"Processing '{input_path}', shape: {df_tick.shape}")
 
@@ -75,31 +90,31 @@ def tick_to_ohlc(
         return (price * volume).sum() / volume.sum()
 
     # Resample and compute OHLCV + VWAP
-    df_ohlcv = df_tick.group_by_dynamic("timestamp", every=timeframe).agg(
+    df_ohlcv = df_tick.group_by_dynamic(TIMESTAMP_COL, every=timeframe).agg(
         [
-            pl.col("price").first().alias("open"),
-            pl.col("price").max().alias("high"),
-            pl.col("price").min().alias("low"),
-            pl.col("price").last().alias("close"),
-            pl.col("volume").sum().alias("volume"),
-            pl.col("dollar_volume").sum().alias("dollar_volume"),
-            pl.map_groups(exprs=["price", "volume"], function=compute_vwap).alias(
-                "vwap"
+            pl.col(PRICE_COL).first().alias(OPEN_COL),
+            pl.col(PRICE_COL).max().alias(HIGH_COL),
+            pl.col(PRICE_COL).min().alias(LOW_COL),
+            pl.col(PRICE_COL).last().alias(CLOSE_COL),
+            pl.col(VOLUME_COL).sum().alias(VOLUME_COL),
+            pl.col(DOLLAR_VOLUME_COL).sum().alias(DOLLAR_VOLUME_COL),
+            pl.map_groups(exprs=[PRICE_COL, VOLUME_COL], function=compute_vwap).alias(
+                VWAP_COL
             ),
         ]
     )
     # Fill in missing dates
-    df_ohlcv = df_ohlcv.upsample(time_column="timestamp", every=timeframe)
+    df_ohlcv = df_ohlcv.upsample(time_column=TIMESTAMP_COL, every=timeframe)
     # Fill in close first to avoid having to shift
-    df_ohlcv = df_ohlcv.with_columns(pl.col("close").fill_null(strategy="forward"))
+    df_ohlcv = df_ohlcv.with_columns(pl.col(CLOSE_COL).fill_null(strategy="forward"))
     df_ohlcv = df_ohlcv.with_columns(
         [
-            pl.col("open").fill_null(pl.col("close")),
-            pl.col("high").fill_null(pl.col("close")),
-            pl.col("low").fill_null(pl.col("close")),
-            pl.col("volume").fill_null(pl.lit(0)),
-            pl.col("dollar_volume").fill_null(pl.lit(0)),
-            pl.col("vwap").fill_null(pl.col("close")),
+            pl.col(OPEN_COL).fill_null(pl.col(CLOSE_COL)),
+            pl.col(HIGH_COL).fill_null(pl.col(CLOSE_COL)),
+            pl.col(LOW_COL).fill_null(pl.col(CLOSE_COL)),
+            pl.col(VOLUME_COL).fill_null(pl.lit(0)),
+            pl.col(DOLLAR_VOLUME_COL).fill_null(pl.lit(0)),
+            pl.col(VWAP_COL).fill_null(pl.col(CLOSE_COL)),
         ]
     )
     return df_ohlcv
@@ -129,7 +144,7 @@ def main(
         input_path=input_path, timeframe=timeframe, start=start, end=end
     )
     ticker = input_path.stem
-    ohlc = ohlc.with_columns(pl.lit(ticker).alias("ticker"))
+    ohlc = ohlc.with_columns(pl.lit(ticker).alias(TICKER_COL))
 
     if output_path is None:
         # Print data

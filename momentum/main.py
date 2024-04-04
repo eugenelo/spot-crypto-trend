@@ -23,15 +23,11 @@ from simulation.constants import DEFAULT_VOLUME_MAX_SIZE, DEFAULT_REBALANCING_BU
 from position_generation.benchmark import generate_benchmark_btc
 from position_generation.utils import nonempty_positions, Direction
 from position_generation.v1 import generate_positions_v1
-from position_generation.generate_positions import generate_positions
+from position_generation.position_generation import generate_positions
+from data.constants import TIMESTAMP_COL, TICKER_COL
 from data.utils import load_ohlc_to_hourly_filtered, load_ohlc_to_daily_filtered
+from core.constants import POSITION_COL, in_universe_excl_stablecoins
 from core.utils import get_periods_per_day
-from core.constants import (
-    TIMESTAMP_COL,
-    TICKER_COL,
-    POSITION_COL,
-    in_universe_excl_stablecoins,
-)
 
 
 def parse_args():
@@ -80,7 +76,9 @@ def get_signal_type(params: dict) -> SignalType:
     )
 
 
-def get_generate_positions(params: dict, periods_per_day: int) -> Callable:
+def get_generate_positions(
+    params: dict, periods_per_day: int, lag_positions: bool
+) -> Callable:
     if params["signal"] == "v1":
         v1_params = params["params"]
         generate_positions_fn = lambda df: generate_positions_v1(df, params=v1_params)
@@ -104,6 +102,7 @@ def get_generate_positions(params: dict, periods_per_day: int) -> Callable:
             min_daily_volume=min_daily_volume,
             max_daily_volume=max_daily_volume,
             leverage=leverage,
+            lag_positions=lag_positions,
         )
     else:
         raise ValueError(
@@ -158,7 +157,11 @@ if __name__ == "__main__":
             params = yaml.safe_load(yaml_file)
         print(f"Loaded params: {params}")
     assert "signal" in params, "Signal should be specified in params!"
-    generate_positions_fn = get_generate_positions(params, periods_per_day)
+    # Lag positions if backtesting
+    lag_positions = args.mode != "positions"
+    generate_positions_fn = get_generate_positions(
+        params, periods_per_day=periods_per_day, lag_positions=lag_positions
+    )
 
     # Create signals
     if args.mode == "analysis" or args.mode == "simulation":
@@ -223,8 +226,8 @@ if __name__ == "__main__":
         backtest_crypto(
             df_analysis,
             periods_per_day=periods_per_day,
-            generate_positions=generate_positions_fn,
-            generate_benchmark=generate_benchmark_fn,
+            generate_positions_fn=generate_positions_fn,
+            generate_benchmark_fn=generate_benchmark_fn,
             start_date=start_date,
             end_date=end_date,
             rebalancing_freq=rebalancing_freq,

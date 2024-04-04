@@ -6,7 +6,7 @@ from typing import Optional
 from datetime import datetime
 import glob
 
-from data.constants import OHLC_COLUMNS
+from data.constants import TIMESTAMP_COL, TICKER_COL, OHLC_COLUMNS
 
 
 def parse_args():
@@ -42,9 +42,9 @@ def main(
             df_ohlc = pd.concat([df_ohlc, df_single], ignore_index=True)
 
     # Remove duplicates
-    df_ohlc.sort_values(by=["timestamp", "ticker"], ascending=True, inplace=True)
+    df_ohlc.sort_values(by=[TIMESTAMP_COL, TICKER_COL], ascending=True, inplace=True)
     df_ohlc.drop_duplicates(
-        subset=["timestamp", "ticker"],
+        subset=[TIMESTAMP_COL, TICKER_COL],
         keep="first",  # Keep the latest available data
         inplace=True,
     )

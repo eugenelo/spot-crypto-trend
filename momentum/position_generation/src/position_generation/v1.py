@@ -3,6 +3,8 @@ import numpy as np
 from datetime import datetime
 from typing import Optional, List
 
+from data.constants import TIMESTAMP_COL, TICKER_COL
+
 
 CRYPTO_MOMO_DEFAULT_PARAMS = {
     "momentum_factor": "30d_log_returns",
@@ -17,7 +19,7 @@ position_types = ["simple", "decile", "crossover"]
 
 def generate_positions_v1(df: pd.DataFrame, params: dict):
     # Ensure that no duplicate rows exist for (ticker, timestamp) combination
-    assert not df.duplicated(subset=["ticker", "timestamp"], keep=False).any()
+    assert not df.duplicated(subset=[TICKER_COL, TIMESTAMP_COL], keep=False).any()
 
     momentum_factor = params["momentum_factor"]
     decile_factor = momentum_factor.split("_")[0] + "_log_returns_decile"
@@ -27,8 +29,8 @@ def generate_positions_v1(df: pd.DataFrame, params: dict):
 
     # Work around NAs in other columns
     cols_to_keep = [
-        "ticker",
-        "timestamp",
+        TICKER_COL,
+        TIMESTAMP_COL,
         momentum_factor,
         "volume_consistent",
         decile_factor,
@@ -37,7 +39,7 @@ def generate_positions_v1(df: pd.DataFrame, params: dict):
 
     df["rank"] = (
         df_operate[df_operate["volume_consistent"]]
-        .groupby(["timestamp"])[momentum_factor]
+        .groupby([TIMESTAMP_COL])[momentum_factor]
         .rank(method="dense", ascending=False)
         .astype(int)
     )
@@ -89,11 +91,11 @@ def generate_positions_v1(df: pd.DataFrame, params: dict):
     # )
 
     position = f"position_{params['type']}"
-    df["total_position_weight"] = df.groupby(["timestamp"])[position].transform("sum")
+    df["total_position_weight"] = df.groupby([TIMESTAMP_COL])[position].transform("sum")
     df["scaled_position"] = df.apply(
         lambda x: x[position] / max(x["total_position_weight"], 1), axis=1
     )
-    df["total_num_positions_long"] = df.groupby("timestamp")[
+    df["total_num_positions_long"] = df.groupby(TIMESTAMP_COL)[
         "scaled_position"
     ].transform(lambda x: (x > 0).sum())
     return df

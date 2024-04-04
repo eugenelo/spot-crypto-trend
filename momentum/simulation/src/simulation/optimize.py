@@ -13,7 +13,7 @@ from simulation.vbt import vbt, get_annualized_volatility
 from simulation.backtest import backtest
 from simulation.stats import get_stats_of_interest, plot_cumulative_returns
 from position_generation.utils import Direction
-from position_generation.generate_positions import generate_positions
+from position_generation.position_generation import generate_positions
 from position_generation.benchmark import (
     generate_benchmark_btc,
 )
@@ -169,6 +169,7 @@ def optimize(
             min_daily_volume=param_set.min_daily_volume,
             max_daily_volume=param_set.max_daily_volume,
             leverage=param_set.leverage,
+            lag_positions=True,
         )
         pf_portfolio = backtest(
             df_portfolio,

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import sys
 
+from data.constants import TICKER_COL
 from data.utils import load_ohlc_csv
 
 
@@ -38,7 +39,7 @@ def convert_tickers(kraken: ccxt.kraken, input_path: str, output_path: str):
     print(f"Available Symbols: {kraken.symbols}")
 
     df = load_ohlc_csv(input_path)
-    tickers = df["ticker"].unique()
+    tickers = df[TICKER_COL].unique()
     for kraken_symbol in tickers:
         if kraken_symbol in SYMBOL_SPECIAL_CASES:
             ccxt_symbol = SYMBOL_SPECIAL_CASES[kraken_symbol]
@@ -51,7 +52,7 @@ def convert_tickers(kraken: ccxt.kraken, input_path: str, output_path: str):
                 kraken_symbol = kraken_symbol.replace("/", "")
                 ccxt_symbol = kraken_symbol[:-3] + "/" + kraken_symbol[-3:]
         print(f"{kraken_symbol} -> {ccxt_symbol}")
-        df.loc[df["ticker"] == kraken_symbol, "ticker"] = ccxt_symbol
+        df.loc[df[TICKER_COL] == kraken_symbol, TICKER_COL] = ccxt_symbol
     # Write output
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -10,7 +10,6 @@ py_library(
     deps = [
         requirement("pandas"),
         requirement("pytz"),
-        "//momentum/core:core",
     ],
     visibility = ["//visibility:public"]
 )

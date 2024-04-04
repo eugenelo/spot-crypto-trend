@@ -6,6 +6,7 @@ from position_generation.v1 import (
     generate_positions_v1,
     CRYPTO_MOMO_DEFAULT_PARAMS,
 )
+from data.constants import TIMESTAMP_COL, TICKER_COL
 from core.constants import POSITION_COL
 
 
@@ -21,22 +22,22 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
     # Weekly rebalancing, sell on Thursday 12am UTC, buy on Friday 12am UTC. Put on position to get next day returns.
     df_analysis["strat_simple_returns_weekly"] = df_analysis.apply(
         lambda x: x[POSITION_COL] * x["next_6d_returns"]
-        if x["timestamp"].day_name() == "Thursday"
+        if x[TIMESTAMP_COL].day_name() == "Thursday"
         else 0,
         axis=1,
     )
     # Benchmark 100% long BTC
     df_analysis["benchmark_simple_returns"] = df_analysis.apply(
-        lambda x: x["next_1d_returns"] if x["ticker"] == "BTC/USD" else 0, axis=1
+        lambda x: x["next_1d_returns"] if x[TICKER_COL] == "BTC/USD" else 0, axis=1
     )
     df_analysis["benchmark_log_returns"] = df_analysis.apply(
-        lambda x: x["next_1d_log_returns"] if x["ticker"] == "BTC/USD" else 0, axis=1
+        lambda x: x["next_1d_log_returns"] if x[TICKER_COL] == "BTC/USD" else 0, axis=1
     )
     df_analysis = df_analysis.dropna()
 
     # Plot cumulative returns
     df_cumulative = (
-        df_analysis.groupby("timestamp")
+        df_analysis.groupby(TIMESTAMP_COL)
         .agg(
             {
                 "strat_simple_returns_daily": "sum",
@@ -46,9 +47,9 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
             }
         )
         .reset_index()
-        .sort_values(by="timestamp")
+        .sort_values(by=TIMESTAMP_COL)
     )
-    df_cumulative["timestamp"] = pd.to_datetime(df_cumulative["timestamp"])
+    df_cumulative[TIMESTAMP_COL] = pd.to_datetime(df_cumulative[TIMESTAMP_COL])
     df_cumulative["strat_log_returns_daily"] = np.log(
         df_cumulative["strat_simple_returns_daily"] + 1
     )
@@ -79,7 +80,7 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
 
     fig = px.line(
         df_cumulative,
-        x="timestamp",
+        x=TIMESTAMP_COL,
         y=[
             "cum_strat_log_returns_daily",
             "cum_strat_log_returns_weekly",
@@ -90,7 +91,7 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
     fig.show()
     fig = px.line(
         df_cumulative,
-        x="timestamp",
+        x=TIMESTAMP_COL,
         y=[
             "cum_strat_returns_daily",
             "cum_strat_returns_weekly",

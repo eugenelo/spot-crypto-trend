@@ -34,11 +34,11 @@ from position_generation.constants import (
     MAX_ABS_POSITION_SIZE_COL,
     IDM_REFRESH_PERIOD,
 )
+from data.constants import TIMESTAMP_COL, TICKER_COL
 from core.constants import (
-    TIMESTAMP_COL,
-    TICKER_COL,
     POSITION_COL,
     PAST_7D_RETURNS_COL,
+    VOLUME_FILTER_COL,
 )
 from signal_generation.common import sort_dataframe, cross_sectional_abs_ema
 from signal_generation.volume import create_volume_filter_mask
@@ -55,6 +55,7 @@ def generate_positions(
     min_daily_volume: Optional[float],
     max_daily_volume: Optional[float],
     leverage: float,
+    lag_positions: bool,
 ) -> pd.DataFrame:
     # Ensure that no duplicate rows exist for (ticker, timestamp) combination
     assert not df.duplicated(subset=[TICKER_COL, TIMESTAMP_COL], keep=False).any()
@@ -78,7 +79,7 @@ def generate_positions(
     df = create_volume_filter_mask(
         df, min_daily_volume=min_daily_volume, max_daily_volume=max_daily_volume
     )
-    df.loc[df["filter_volume"], SCALED_SIGNAL_COL] = np.nan
+    df.loc[df[VOLUME_FILTER_COL], SCALED_SIGNAL_COL] = np.nan
 
     # Generate signal ranks
     rank_col = RANK_COL.format(signal=SCALED_SIGNAL_COL)
@@ -178,8 +179,9 @@ def generate_positions(
     # Leverage constraints + Cap wild sizing from very low volatility estimates
     df = cap_position_size(df, direction=direction, leverage=leverage)
 
-    # Lag positions by one day, avoid cheating w/ future information
-    df[POSITION_COL] = df[POSITION_COL].shift(1)
+    if lag_positions:
+        # Lag positions by one day, avoid cheating w/ future information
+        df[POSITION_COL] = df[POSITION_COL].shift(1)
 
     return df
 

@@ -17,18 +17,19 @@ from signal_generation.common import (
     rolling_sum,
     bins,
 )
+from data.constants import TIMESTAMP_COL, TICKER_COL, CLOSE_COL
 
 
 class TestSimulationUtils(unittest.TestCase):
     def setup(self):
         prices_A = [1, 1.5, 1.2, 0.5, 0.01]
         prices_B = [1, 2, 4, 8, 16]
-        prices = {"ticker": ["A"] * 5 + ["B"] * 5, "close": prices_A + prices_B}
+        prices = {TICKER_COL: ["A"] * 5 + ["B"] * 5, CLOSE_COL: prices_A + prices_B}
         close = pd.DataFrame.from_dict(prices)
         start_date = "2020-01-01"
         dti = pd.date_range(start_date, periods=len(prices_A), freq="1d")
-        close.loc[close["ticker"] == "A", "timestamp"] = dti
-        close.loc[close["ticker"] == "B", "timestamp"] = dti
+        close.loc[close[TICKER_COL] == "A", TIMESTAMP_COL] = dti
+        close.loc[close[TICKER_COL] == "B", TIMESTAMP_COL] = dti
         return sort_dataframe(close), start_date
 
     def test_sort_dataframe(self):
@@ -37,28 +38,28 @@ class TestSimulationUtils(unittest.TestCase):
         df_prices = df_prices.sample(frac=1)
         df_prices = sort_dataframe(df_prices)
         for i in range(5):
-            self.assertEqual("A", df_prices.iloc[i]["ticker"])
+            self.assertEqual("A", df_prices.iloc[i][TICKER_COL])
             self.assertEqual(
                 pd.to_datetime(start_date) + timedelta(days=i),
-                df_prices.iloc[i]["timestamp"],
+                df_prices.iloc[i][TIMESTAMP_COL],
             )
         for i in range(5, 10):
             offset = 5
-            self.assertEqual("B", df_prices.iloc[i]["ticker"])
+            self.assertEqual("B", df_prices.iloc[i][TICKER_COL])
             self.assertEqual(
                 pd.to_datetime(start_date) + timedelta(days=(i - offset)),
-                df_prices.iloc[i]["timestamp"],
+                df_prices.iloc[i][TIMESTAMP_COL],
             )
 
     def test_returns(self):
         df_prices, start_date = self.setup()
-        A_mask = df_prices["ticker"] == "A"
-        B_mask = df_prices["ticker"] == "B"
-        prices_A = df_prices.loc[A_mask]["close"]
-        prices_B = df_prices.loc[B_mask]["close"]
+        A_mask = df_prices[TICKER_COL] == "A"
+        B_mask = df_prices[TICKER_COL] == "B"
+        prices_A = df_prices.loc[A_mask][CLOSE_COL]
+        prices_B = df_prices.loc[B_mask][CLOSE_COL]
 
         # 1 period returns
-        df_prices["returns"] = returns(df_prices, column="close", periods=1)
+        df_prices["returns"] = returns(df_prices, column=CLOSE_COL, periods=1)
         returns_A = df_prices.loc[A_mask]["returns"]
         for i in range(5):
             if i == 0:
@@ -77,7 +78,7 @@ class TestSimulationUtils(unittest.TestCase):
                 self.assertAlmostEqual(expected_return, returns_B.iloc[i])
 
         # 2 period returns
-        df_prices["2d_returns"] = returns(df_prices, column="close", periods=2)
+        df_prices["2d_returns"] = returns(df_prices, column=CLOSE_COL, periods=2)
         returns_2d_A = df_prices.loc[A_mask]["2d_returns"]
         for i in range(5):
             if i <= 1:
@@ -97,13 +98,13 @@ class TestSimulationUtils(unittest.TestCase):
 
     def test_log_returns(self):
         df_prices, start_date = self.setup()
-        A_mask = df_prices["ticker"] == "A"
-        B_mask = df_prices["ticker"] == "B"
-        prices_A = df_prices.loc[A_mask]["close"]
-        prices_B = df_prices.loc[B_mask]["close"]
+        A_mask = df_prices[TICKER_COL] == "A"
+        B_mask = df_prices[TICKER_COL] == "B"
+        prices_A = df_prices.loc[A_mask][CLOSE_COL]
+        prices_B = df_prices.loc[B_mask][CLOSE_COL]
 
         # 1 period returns
-        df_prices["log_returns"] = log_returns(df_prices, column="close", periods=1)
+        df_prices["log_returns"] = log_returns(df_prices, column=CLOSE_COL, periods=1)
         log_returns_A = df_prices.loc[A_mask]["log_returns"]
         for i in range(5):
             if i == 0:
@@ -120,7 +121,9 @@ class TestSimulationUtils(unittest.TestCase):
                 self.assertAlmostEqual(expected_return, log_returns_B.iloc[i])
 
         # 2 period returns
-        df_prices["2d_log_returns"] = log_returns(df_prices, column="close", periods=2)
+        df_prices["2d_log_returns"] = log_returns(
+            df_prices, column=CLOSE_COL, periods=2
+        )
         log_returns_2d_A = df_prices.loc[A_mask]["2d_log_returns"]
         for i in range(5):
             if i <= 1:
@@ -140,12 +143,12 @@ class TestSimulationUtils(unittest.TestCase):
         df_prices, start_date = self.setup()
 
         # 1 period future returns
-        df_prices["returns"] = returns(df_prices, column="close", periods=1)
+        df_prices["returns"] = returns(df_prices, column=CLOSE_COL, periods=1)
         df_prices["next_1d_returns"] = future_returns(
-            df_prices, column="close", periods=1
+            df_prices, column=CLOSE_COL, periods=1
         )
         for ticker in ["A", "B"]:
-            df_ticker = df_prices.loc[df_prices["ticker"] == ticker]
+            df_ticker = df_prices.loc[df_prices[TICKER_COL] == ticker]
             s_returns = df_ticker["returns"]
             s_next_1d_returns = df_ticker["next_1d_returns"]
             for i in range(5):
@@ -155,12 +158,12 @@ class TestSimulationUtils(unittest.TestCase):
                     self.assertEqual(s_returns.iloc[i + 1], s_next_1d_returns.iloc[i])
 
         # 2 period future returns
-        df_prices["2d_returns"] = returns(df_prices, column="close", periods=2)
+        df_prices["2d_returns"] = returns(df_prices, column=CLOSE_COL, periods=2)
         df_prices["next_2d_returns"] = future_returns(
-            df_prices, column="close", periods=2
+            df_prices, column=CLOSE_COL, periods=2
         )
         for ticker in ["A", "B"]:
-            df_ticker = df_prices.loc[df_prices["ticker"] == ticker]
+            df_ticker = df_prices.loc[df_prices[TICKER_COL] == ticker]
             s_returns = df_ticker["2d_returns"]
             s_next_2d_returns = df_ticker["next_2d_returns"]
             for i in range(5):
@@ -173,12 +176,12 @@ class TestSimulationUtils(unittest.TestCase):
         df_prices, start_date = self.setup()
 
         # 1 period future log_returns
-        df_prices["log_returns"] = log_returns(df_prices, column="close", periods=1)
+        df_prices["log_returns"] = log_returns(df_prices, column=CLOSE_COL, periods=1)
         df_prices["next_1d_log_returns"] = future_log_returns(
-            df_prices, column="close", periods=1
+            df_prices, column=CLOSE_COL, periods=1
         )
         for ticker in ["A", "B"]:
-            df_ticker = df_prices.loc[df_prices["ticker"] == ticker]
+            df_ticker = df_prices.loc[df_prices[TICKER_COL] == ticker]
             s_log_returns = df_ticker["log_returns"]
             s_next_1d_log_returns = df_ticker["next_1d_log_returns"]
             for i in range(5):
@@ -190,12 +193,14 @@ class TestSimulationUtils(unittest.TestCase):
                     )
 
         # 2 period future log_returns
-        df_prices["2d_log_returns"] = log_returns(df_prices, column="close", periods=2)
+        df_prices["2d_log_returns"] = log_returns(
+            df_prices, column=CLOSE_COL, periods=2
+        )
         df_prices["next_2d_log_returns"] = future_log_returns(
-            df_prices, column="close", periods=2
+            df_prices, column=CLOSE_COL, periods=2
         )
         for ticker in ["A", "B"]:
-            df_ticker = df_prices.loc[df_prices["ticker"] == ticker]
+            df_ticker = df_prices.loc[df_prices[TICKER_COL] == ticker]
             s_log_returns = df_ticker["2d_log_returns"]
             s_next_2d_log_returns = df_ticker["next_2d_log_returns"]
             for i in range(5):
@@ -211,10 +216,10 @@ class TestSimulationUtils(unittest.TestCase):
 
         # 3 period EMA
         num_periods = 4
-        df_prices["4d_ema"] = ema(df_prices, column="close", periods=num_periods)
+        df_prices["4d_ema"] = ema(df_prices, column=CLOSE_COL, periods=num_periods)
         for ticker in ["A", "B"]:
-            df_ticker = df_prices.loc[df_prices["ticker"] == ticker]
-            prices = df_ticker["close"]
+            df_ticker = df_prices.loc[df_prices[TICKER_COL] == ticker]
+            prices = df_ticker[CLOSE_COL]
             s_4d_ema = df_ticker["4d_ema"]
 
             expected_4d_ema = [prices.iloc[0]]
@@ -228,20 +233,22 @@ class TestSimulationUtils(unittest.TestCase):
     def test_ema_daily(self):
         df = pd.DataFrame.from_dict(
             {
-                "ticker": ["A"] * 7,
-                "close": [1, 2, 1, 2, 3, 4, 5],
+                TICKER_COL: ["A"] * 7,
+                CLOSE_COL: [1, 2, 1, 2, 3, 4, 5],
             }
         )
         df_every_other = df[::2]
 
         # 5 day EMA on every other data
         num_days = 5
-        true_5d_ema_every_other = ema(df_every_other, column="close", periods=num_days)
+        true_5d_ema_every_other = ema(
+            df_every_other, column=CLOSE_COL, periods=num_days
+        )
         expected_5d_ema = [1, 1, 5 / 3, 25 / 9]
         self.assertEqual(expected_5d_ema, list(true_5d_ema_every_other))
         # Comparable 5 day EMA on original data...backfilled?
         backfill_5d_ema = ema_daily(
-            df, column="close", days=num_days, periods_per_day=2
+            df, column=CLOSE_COL, days=num_days, periods_per_day=2
         )
         self.assertEqual(expected_5d_ema, list(backfill_5d_ema))
 
@@ -249,10 +256,10 @@ class TestSimulationUtils(unittest.TestCase):
         df_prices, start_date = self.setup()
 
         # 3 period stddev
-        df_prices["3d_vol"] = volatility(df_prices, "close", periods=3)
+        df_prices["3d_vol"] = volatility(df_prices, CLOSE_COL, periods=3)
         for ticker in ["A", "B"]:
-            df_ticker = df_prices.loc[df_prices["ticker"] == ticker]
-            prices = df_ticker["close"]
+            df_ticker = df_prices.loc[df_prices[TICKER_COL] == ticker]
+            prices = df_ticker[CLOSE_COL]
             s_3d_vol = df_ticker["3d_vol"]
             expected_3d_vol = [
                 np.nan,
@@ -272,11 +279,11 @@ class TestSimulationUtils(unittest.TestCase):
 
         # 3 period stddev
         df_prices["next_3d_vol"] = future_volatility(
-            df_prices, column="close", periods=3
+            df_prices, column=CLOSE_COL, periods=3
         )
         for ticker in ["A", "B"]:
-            df_ticker = df_prices.loc[df_prices["ticker"] == ticker]
-            prices = df_ticker["close"]
+            df_ticker = df_prices.loc[df_prices[TICKER_COL] == ticker]
+            prices = df_ticker[CLOSE_COL]
             s_3d_future_vol = df_ticker["next_3d_vol"]
             expected_3d_future_vol = [
                 np.std(prices[0:3], ddof=1),
@@ -297,10 +304,10 @@ class TestSimulationUtils(unittest.TestCase):
         df_prices, start_date = self.setup()
 
         # 3 period rolling sum
-        df_prices["3d_sum_close"] = rolling_sum(df_prices, "close", periods=3)
+        df_prices["3d_sum_close"] = rolling_sum(df_prices, CLOSE_COL, periods=3)
         for ticker in ["A", "B"]:
-            df_ticker = df_prices.loc[df_prices["ticker"] == ticker]
-            prices = df_ticker["close"]
+            df_ticker = df_prices.loc[df_prices[TICKER_COL] == ticker]
+            prices = df_ticker[CLOSE_COL]
             s_3d_sum_close = df_ticker["3d_sum_close"]
             expected_3d_sum = [
                 np.nan,

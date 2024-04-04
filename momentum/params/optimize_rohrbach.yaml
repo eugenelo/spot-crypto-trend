@@ -1,3 +1,5 @@
+generate_benchmark: btc
+
 signal: rohrbach_exponential
 direction: LongOnly
 rebalancing_freq: null

@@ -2,6 +2,8 @@ import pandas as pd
 import plotly.express as px
 from scipy import stats
 
+from data.constants import TICKER_COL
+
 
 def analysis(
     df_analysis: pd.DataFrame,
@@ -29,7 +31,7 @@ def analysis(
         title=f"Crypto Relationship {feature} and {target}",
         trendline="ols",
         trendline_color_override="red",
-        # facet_col="ticker",
+        # facet_col=TICKER_COL,
         # facet_row="year",
         # facet_col="year",
         # facet_col_wrap=4,

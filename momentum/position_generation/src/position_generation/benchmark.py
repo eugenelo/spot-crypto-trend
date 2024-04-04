@@ -1,6 +1,7 @@
 import pandas as pd
 
-from core.constants import TICKER_COL, POSITION_COL
+from data.constants import TICKER_COL
+from core.constants import POSITION_COL
 
 
 def generate_benchmark_btc(df: pd.DataFrame) -> pd.DataFrame:

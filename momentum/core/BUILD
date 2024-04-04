@@ -5,6 +5,7 @@ py_library(
     srcs = [
         "src/core/constants.py",
         "src/core/utils.py",
+        "//data:data",
     ],
     imports = ["src"],
     deps = [
@@ -24,4 +25,14 @@ py_library(
         requirement("numba"),
     ],
     visibility = ["//visibility:public"]
+)
+
+py_test(
+    name="test_utils",
+    srcs = ["test/test_utils.py"],
+    deps = [
+        ":core",
+        "//data:data",
+    ],
+    size="small",
 )

@@ -7,6 +7,7 @@ py_library(
     deps = [
         requirement("static-frame"),
         "//momentum/signal_generation:signal_generation",
+        "//data:data",
     ],
     visibility = ["//visibility:public"],
 )

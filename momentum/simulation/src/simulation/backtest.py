@@ -4,10 +4,12 @@ import numpy as np
 from typing import List, Callable, Optional
 from numba import njit
 
-from core.constants import (
+from data.constants import (
     TIMESTAMP_COL,
     TICKER_COL,
     VOLUME_COL,
+)
+from core.constants import (
     PRICE_COL_BACKTEST,
     POSITION_COL,
 )
@@ -253,8 +255,8 @@ def backtest(
 
 def backtest_crypto(
     df_analysis: pd.DataFrame,
-    generate_positions: Callable,
-    generate_benchmark: Callable,
+    generate_positions_fn: Callable,
+    generate_benchmark_fn: Callable,
     periods_per_day: int,
     start_date: str,
     end_date: str,
@@ -269,8 +271,8 @@ def backtest_crypto(
 
     Args:
         df_analysis (pd.DataFrame): _description_
-        generate_positions (Callable): Generates positions for df_analysis. Signature `(pd.DataFrame, dict) -> pd.DataFrame`.
-        generate_benchmark (Callable): Generates benchmark positions for df_analysis. Signature `(pd.DataFrame, dict) -> pd.DataFrame`.
+        generate_positions_fn (Callable): Generates positions for df_analysis. Signature `(pd.DataFrame, dict) -> pd.DataFrame`.
+        generate_benchmark_fn (Callable): Generates benchmark positions for df_analysis. Signature `(pd.DataFrame, dict) -> pd.DataFrame`.
         start_date (str): _description_
         end_date (str): _description_
         initial_capital (float): _description_
@@ -280,7 +282,7 @@ def backtest_crypto(
         List[vbt.Portfolio]: _description_
     """
     # Backtest benchmark
-    df_benchmark = generate_benchmark(df_analysis)
+    df_benchmark = generate_benchmark_fn(df_analysis)
     pf_benchmark = backtest(
         df_benchmark,
         periods_per_day=periods_per_day,
@@ -293,7 +295,7 @@ def backtest_crypto(
         verbose=False,
     )
     # Backtest portfolio
-    df_portfolio = generate_positions(df_analysis)
+    df_portfolio = generate_positions_fn(df_analysis)
     pf_portfolio = backtest(
         df_portfolio,
         periods_per_day=periods_per_day,

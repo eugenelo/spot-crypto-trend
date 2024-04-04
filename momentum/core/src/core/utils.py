@@ -6,14 +6,9 @@ import re
 from typing import Callable
 
 
-def filter_universe(df: pd.DataFrame, whitelist_fn: Callable):
-    df_filtered = df.loc[df["ticker"].apply(whitelist_fn)]
-    return df_filtered
-
-
 def apply_hysteresis(
     df, group_col, value_col, output_col, entry_threshold, exit_threshold
-):
+) -> pd.DataFrame:
     # Mark where value crosses entry and where it crosses exit
     df["above_entry"] = df[value_col] > entry_threshold
     df["below_exit"] = df[value_col] < exit_threshold
@@ -35,7 +30,9 @@ def apply_hysteresis(
         df.loc[df["exit_point"], output_col] = False
 
         # Forward fill within groups to propagate state, then backward fill initial NaNs if any
-        df[output_col] = df.groupby(group_col)[output_col].ffill().fillna(False)
+        df[output_col] = (
+            df.groupby(group_col)[output_col].ffill().fillna(False).astype(bool)
+        )
 
         # Drop helper columns
         df.drop(
@@ -47,7 +44,7 @@ def apply_hysteresis(
     return df
 
 
-def get_periods_per_day(timestamp_series: pd.Series):
+def get_periods_per_day(timestamp_series: pd.Series) -> int:
     timestamp_series = timestamp_series.copy()
     timestamp_series = timestamp_series.sort_values(ascending=True)
     timestamp_series.index = pd.RangeIndex(len(timestamp_series.index))

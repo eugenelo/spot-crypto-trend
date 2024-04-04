@@ -7,6 +7,7 @@ py_library(
         ":vbt",
         "//momentum/position_generation:position_generation",
         "//momentum/core:core",
+        "//data:data",
     ],
     visibility = ["//visibility:public"]
 )
@@ -49,6 +50,7 @@ py_test(
     srcs = ["test/test_simulate.py"],
     deps = [
         ":vbt",
+        "//data:data",
     ],
     size="medium",
 )
@@ -57,7 +59,8 @@ py_test(
     name="test_utils",
     srcs = ["test/test_utils.py"],
     deps = [
-        ":simulation"
+        ":simulation",
+        "//data:data",
     ],
     size="small",
 )
@@ -66,7 +69,8 @@ py_test(
     name="test_optimize",
     srcs = ["test/test_optimize.py"],
     deps = [
-        ":simulation"
+        ":simulation",
+        "//data:data",
     ],
     size="small",
 )

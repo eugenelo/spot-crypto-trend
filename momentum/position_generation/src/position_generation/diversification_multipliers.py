@@ -12,11 +12,11 @@ from position_generation.constants import (
     SCALED_SIGNAL_COL,
     IDM_REFRESH_PERIOD,
 )
-from core.constants import (
+from data.constants import (
     TIMESTAMP_COL,
     TICKER_COL,
-    POSITION_COL,
 )
+from core.constants import POSITION_COL
 
 
 @cache

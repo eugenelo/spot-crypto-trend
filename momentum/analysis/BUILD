@@ -9,6 +9,7 @@ py_library(
         requirement("plotly"),
         requirement("scipy"),
         requirement("statsmodels"),
+        "//data:data",
     ],
     visibility = ["//visibility:public"]
 )

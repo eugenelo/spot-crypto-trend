@@ -9,6 +9,7 @@ py_library(
         requirement("plotly"),
         requirement("numpy"),
         "//momentum/core:core",
+        "//data:data",
     ],
     visibility = ["//visibility:public"],
 )
@@ -17,7 +18,18 @@ py_test(
     name="test_common",
     srcs = ["test/test_common.py"],
     deps = [
-        ":signal_generation"
+        ":signal_generation",
+        "//data:data",
+    ],
+    size="small",
+)
+
+py_test(
+    name="test_volume",
+    srcs = ["test/test_volume.py"],
+    deps = [
+        ":signal_generation",
+        "//data:data",
     ],
     size="small",
 )
