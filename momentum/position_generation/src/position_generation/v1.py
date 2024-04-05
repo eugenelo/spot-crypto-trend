@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional, List
 
 from data.constants import TIMESTAMP_COL, TICKER_COL
+from core.constants import POSITION_COL
 
 
 CRYPTO_MOMO_DEFAULT_PARAMS = {
@@ -92,10 +93,10 @@ def generate_positions_v1(df: pd.DataFrame, params: dict):
 
     position = f"position_{params['type']}"
     df["total_position_weight"] = df.groupby([TIMESTAMP_COL])[position].transform("sum")
-    df["scaled_position"] = df.apply(
+    df[POSITION_COL] = df.apply(
         lambda x: x[position] / max(x["total_position_weight"], 1), axis=1
     )
-    df["total_num_positions_long"] = df.groupby(TIMESTAMP_COL)[
-        "scaled_position"
-    ].transform(lambda x: (x > 0).sum())
+    df["total_num_positions_long"] = df.groupby(TIMESTAMP_COL)[POSITION_COL].transform(
+        lambda x: (x > 0).sum()
+    )
     return df

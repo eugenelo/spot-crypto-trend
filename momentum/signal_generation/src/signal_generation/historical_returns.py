@@ -11,7 +11,7 @@ from signal_generation.common import (
     bins,
 )
 from data.constants import TIMESTAMP_COL
-from core.constants import PRICE_COL_SIGNAL_GEN
+from core.constants import PRICE_COL_SIGNAL_GEN, RETURNS_COL, LOG_RETURNS_COL
 
 
 def create_historical_return_signals(
@@ -20,8 +20,8 @@ def create_historical_return_signals(
     df = sort_dataframe(df_ohlc)
 
     # Calculate returns
-    df["returns"] = returns(df, column=PRICE_COL_SIGNAL_GEN, periods=1)
-    df["log_returns"] = log_returns(df, column=PRICE_COL_SIGNAL_GEN, periods=1)
+    df[RETURNS_COL] = returns(df, column=PRICE_COL_SIGNAL_GEN, periods=1)
+    df[LOG_RETURNS_COL] = log_returns(df, column=PRICE_COL_SIGNAL_GEN, periods=1)
 
     # Calculate EMAs.
     for lookback_days in [2, 6] + list(range(4, 192 + 1, 4)):
@@ -33,7 +33,7 @@ def create_historical_return_signals(
     for lookback_days in [30, 182, 365]:
         periods = lookback_days * periods_per_day
         df[f"returns_{lookback_days}d_vol"] = volatility_ema(
-            df, column="returns", periods=periods
+            df, column=RETURNS_COL, periods=periods
         ) * np.sqrt(365 / periods_per_day)
 
     # Calculate rolling historical returns

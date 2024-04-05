@@ -50,7 +50,6 @@ py_test(
     srcs = ["test/test_simulate.py"],
     deps = [
         ":vbt",
-        "//data:data",
     ],
     size="medium",
 )
