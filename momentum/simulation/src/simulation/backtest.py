@@ -73,13 +73,17 @@ def backtest(
     # Transform data from long to wide
     df_backtest = df_backtest.sort_values([TIMESTAMP_COL, TICKER_COL])
     price = df_backtest[[TIMESTAMP_COL, TICKER_COL, PRICE_COL_BACKTEST]]
+    # Prices can't be exactly 0 for purpose of computing stats. If
+    # they are equal to 0, it likely means that there was no volume here.
+    EPS = 1e-6
+    price.loc[price[PRICE_COL_BACKTEST] == 0, PRICE_COL_BACKTEST] = EPS
     price = pd.pivot_table(
         price,
         index=TIMESTAMP_COL,
         columns=TICKER_COL,
         values=PRICE_COL_BACKTEST,
         dropna=False,
-        fill_value=1e-6,  # Can't be exactly 0
+        fill_value=EPS,
     )
     volume = df_backtest[[TIMESTAMP_COL, TICKER_COL, VOLUME_COL]]
     volume = pd.pivot_table(

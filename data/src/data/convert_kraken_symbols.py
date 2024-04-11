@@ -29,9 +29,13 @@ def parse_args():
 SYMBOL_SPECIAL_CASES = {
     # BTC symbol from downloaded tick data differs from API
     "XBTUSD": "BTC/USD",
+    # Luna / Terra
+    "LUNAUSD": "LUNC/USD",
+    "LUNA2USD": "LUNA/USD",
+    "USTUSD": "USTC/USD",
     # REP v1 and v2 still both trade in separate markets on Kraken
-    "REPUSD": "REP/USD",
-    "REPV2USD": "REPV2/USD",
+    "REPUSD": "REPV1/USD",
+    "REPV2USD": "REP/USD",
 }
 
 
@@ -56,7 +60,7 @@ def convert_tickers(kraken: ccxt.kraken, input_path: str, output_path: str):
     # Write output
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(str(output_path))
+    df.to_csv(str(output_path), index=False)
     print(f"Wrote output to '{output_path}'")
 
 

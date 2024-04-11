@@ -5,12 +5,12 @@ py_library(
     srcs = [
         "src/core/constants.py",
         "src/core/utils.py",
-        "//data:data",
     ],
     imports = ["src"],
     deps = [
         requirement("pandas"),
         requirement("numpy"),
+        "//data:data",
     ],
     visibility = ["//visibility:public"]
 )

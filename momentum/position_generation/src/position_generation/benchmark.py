@@ -1,7 +1,18 @@
 import pandas as pd
+from typing import Callable
 
 from data.constants import TICKER_COL
 from core.constants import POSITION_COL
+
+
+def get_generate_benchmark_fn(params: dict) -> Callable:
+    if params["generate_benchmark"] == "btc":
+        generate_benchmark = generate_benchmark_btc
+    else:
+        raise ValueError(
+            f"Unsupported 'generate_benchmark' argument: {params['generate_benchmark']}"
+        )
+    return generate_benchmark
 
 
 def generate_benchmark_btc(df: pd.DataFrame) -> pd.DataFrame:

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional, List
 import datetime
 import glob
+from tqdm.auto import tqdm
 
 from data.constants import (
     TIMESTAMP_COL,
@@ -17,17 +18,43 @@ from data.constants import (
     DOLLAR_VOLUME_COL,
     TICKER_COL,
     PRICE_COL,
+    ID_COL,
+    ORDER_SIDE_COL,
+    ORDER_TYPE_COL,
+    TICK_COLUMNS,
+    TICK_COLUMNS_LEGACY,
+    TICK_SCHEMA_POLARS,
+    TICK_SCHEMA_LEGACY_POLARS,
 )
+from data.utils import valid_tick_df_polars
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Convert tick data to OHLC data")
     parser.add_argument("--input_path", "-i", type=str, help="Input file path")
-    parser.add_argument("--output_path", "-o", type=str, help="Output file path")
     parser.add_argument("--input_dir", "-di", type=str, help="Input directory")
+    parser.add_argument("--output_path", "-o", type=str, help="Output file path")
     parser.add_argument("--output_dir", "-do", type=str, help="Output directory")
     parser.add_argument(
         "--timeframe", "-t", type=str, default="1h", help="1m / 1h / 1d / etc."
+    )
+    parser.add_argument(
+        "--combine",
+        "-c",
+        action="store_true",
+        help="Combine all input data into single output file",
+    )
+    parser.add_argument(
+        "--recursive",
+        "-r",
+        action="store_true",
+        help="Recurse through subdirectories from input directory",
+    )
+    parser.add_argument(
+        "--overwrite",
+        "-ow",
+        action="store_true",
+        help="Overwrite existing files (if any), otherwise will skip processing",
     )
     parser.add_argument(
         "--start",
@@ -44,14 +71,82 @@ def parse_args():
     return parser.parse_args()
 
 
+def read_tick_csv(input_path: Path) -> pl.DataFrame:
+    """
+    Read tick data csv into DataFrame
+
+    Args:
+        input_path (Path): Path to tick csv
+
+    Returns:
+        pl.DataFrame: DataFrame containing tick data
+    """
+    try:
+        # Read new format (with header and id column)
+        df_tick = pl.read_csv(
+            input_path,
+            has_header=True,
+            dtypes=TICK_SCHEMA_POLARS,
+        )
+        if df_tick.columns != TICK_COLUMNS:
+            # This is an old format file
+            raise pl.exceptions.ColumnNotFoundError()
+        df_tick = df_tick.drop([ORDER_SIDE_COL, ORDER_TYPE_COL])
+    except pl.exceptions.ColumnNotFoundError:
+        # Read old format (no header and no id column)
+        df_tick = pl.read_csv(
+            input_path,
+            has_header=False,
+            new_columns=TICK_COLUMNS_LEGACY,
+            dtypes=[pl.Float64] * len(TICK_COLUMNS_LEGACY),
+        )
+        # Add 1-indexed id column and ticker column
+        df_tick = df_tick.with_row_index(name=ID_COL, offset=1)
+        ticker = get_ticker_from_filepath(input_path)
+        df_tick = df_tick.with_columns(pl.lit(ticker).alias(TICKER_COL))
+    return df_tick
+
+
+def get_ticker_from_filepath(input_path: Path) -> str:
+    """
+    Get ticker name from input path (assume filename is formatted '{ticker}_{suffix}.csv')
+
+    Args:
+        input_path (Path): Input path
+
+    Returns:
+        str: Ticker name for path
+    """
+    ticker = input_path.stem.split("_")[0]
+    # Should be a USD ticker
+    usd_offset = -5 if ticker.endswith("PYUSD") else -3
+    return f"{ticker[:usd_offset]}/{ticker[usd_offset:]}"
+
+
+def get_output_path(input_path: Path, output_dir: Path) -> Path:
+    return Path(output_dir) / f"{input_path.stem}_OHLC{input_path.suffix}"
+
+
+def get_combined_output_path(input_paths: List[Path], output_dir: Path) -> Path:
+    input_path = input_paths[0]
+    return Path(output_dir) / f"{input_path.stem.split('_')[0]}_OHLC{input_path.suffix}"
+
+
+def get_subdirectories(filepaths: List[Path]) -> List[Path]:
+    subdirs = set()
+    for path in filepaths:
+        subdirs.add(path.parent)
+    return sorted(list(subdirs))
+
+
 def tick_to_ohlc(
-    input_path: Path, timeframe: str, start: Optional[str], end: Optional[str]
+    df_tick: pl.DataFrame, timeframe: str, start: Optional[str], end: Optional[str]
 ):
     """
     Convert tick data to OHLC data.
 
     Parameters:
-        input_path (pathlib.Path): Filepath to input_path csv.
+        df_tick (pl.DataFrame): DataFrame containing tick data
         timeframe (str): Timeframe for OHLC data (e.g., '1m', '1h', '1d').
         start (Optional[str]): Starting UTC date before which to filter out data.
         end (Optional[str]): Ending UTC date after which to filter out data.
@@ -59,10 +154,7 @@ def tick_to_ohlc(
     Returns:
         pandas DataFrame: DataFrame containing OHLC data.
     """
-    # Convert tick data to DataFrame
-    df_tick = pl.read_csv(
-        input_path, has_header=False, new_columns=[TIMESTAMP_COL, PRICE_COL, VOLUME_COL]
-    )
+    # Add dollar volume column
     df_tick = df_tick.with_columns(dollar_volume=pl.col(PRICE_COL) * pl.col(VOLUME_COL))
 
     # Convert timestamp column to datetime
@@ -80,8 +172,6 @@ def tick_to_ohlc(
     if end is not None:
         # Filter on start
         df_tick = df_tick.filter(pl.col(TIMESTAMP_COL) <= pd.to_datetime(end, utc=True))
-
-    print(f"Processing '{input_path}', shape: {df_tick.shape}")
 
     # Define a custom aggregation function to compute VWAP
     def compute_vwap(args: List[pl.Series]) -> pl.Series:
@@ -101,6 +191,7 @@ def tick_to_ohlc(
             pl.map_groups(exprs=[PRICE_COL, VOLUME_COL], function=compute_vwap).alias(
                 VWAP_COL
             ),
+            pl.col(TICKER_COL).first().alias(TICKER_COL),
         ]
     )
     # Fill in missing dates
@@ -115,36 +206,20 @@ def tick_to_ohlc(
             pl.col(VOLUME_COL).fill_null(pl.lit(0)),
             pl.col(DOLLAR_VOLUME_COL).fill_null(pl.lit(0)),
             pl.col(VWAP_COL).fill_null(pl.col(CLOSE_COL)),
+            pl.col(TICKER_COL).fill_null(pl.col(TICKER_COL).first()),
         ]
     )
     return df_ohlcv
 
 
-def main(
-    input_path: Path,
+def process_tick_df(
+    df_tick: pl.DataFrame,
     timeframe: str,
     start: Optional[str],
     end: Optional[str],
     output_path: Optional[Path],
 ):
-    """
-    Main wrapper.
-
-    Parameters:
-        input_path (pathlib.Path): Filepath to input csv.
-        timeframe (str): Timeframe for OHLC data (e.g., '1Min', '1H', '1D').
-        start (Optional[str]): Starting UTC date before which to filter out data.
-        end (Optional[str]): Ending UTC date after which to filter out data.
-        output_path (Optional[pathlib.Path]): Filepath to output csv.
-
-    Returns:
-        pandas DataFrame: DataFrame containing OHLC data.
-    """
-    ohlc = tick_to_ohlc(
-        input_path=input_path, timeframe=timeframe, start=start, end=end
-    )
-    ticker = input_path.stem
-    ohlc = ohlc.with_columns(pl.lit(ticker).alias(TICKER_COL))
+    ohlc = tick_to_ohlc(df_tick=df_tick, timeframe=timeframe, start=start, end=end)
 
     if output_path is None:
         # Print data
@@ -154,48 +229,204 @@ def main(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         ohlc.write_csv(output_path)
         print(
-            f"Converted {input_path} into {args.timeframe} OHLC data at {output_path}"
+            f"Converted {df_tick.shape} dataframe into {args.timeframe} OHLC data at {output_path}"
         )
 
 
-if __name__ == "__main__":
-    # Parse arguments
-    args = parse_args()
+def process_single_path(
+    input_path: Path,
+    timeframe: str,
+    start: Optional[str],
+    end: Optional[str],
+    output_path: Optional[Path],
+    overwrite: bool = True,
+):
+    """
+    Process a single path.
 
+    Parameters:
+        input_path (Path): Filepath to input csv.
+        timeframe (str): Timeframe for OHLC data (e.g., '1Min', '1H', '1D').
+        start (Optional[str]): Starting UTC date before which to filter out data.
+        end (Optional[str]): Ending UTC date after which to filter out data.
+        output_path (Optional[Path]): Filepath to output csv.
+
+    Returns:
+        pandas DataFrame: DataFrame containing OHLC data.
+    """
+    # Check if output path already exists and overwrite is False
+    if output_path is not None and output_path.exists() and not overwrite:
+        print(f"Output '{output_path}' already exists, skipping '{input_path}'")
+        return
+
+    # Convert tick data to DataFrame
+    df_tick = read_tick_csv(input_path)
+    assert valid_tick_df_polars(df_tick, combined=False), f"{input_path} invalid!"
+    process_tick_df(
+        df_tick=df_tick,
+        timeframe=timeframe,
+        start=start,
+        end=end,
+        output_path=output_path,
+    )
+
+
+def process_multiple_paths(
+    input_paths: List[Path],
+    timeframe: str,
+    start: Optional[str],
+    end: Optional[str],
+    output_path: Optional[Path],
+    overwrite: bool = True,
+):
+    """
+    Process multiple paths as a single path.
+
+    Parameters:
+        input_paths (List[Path]): List of paths to input csvs.
+        timeframe (str): Timeframe for OHLC data (e.g., '1Min', '1H', '1D').
+        start (Optional[str]): Starting UTC date before which to filter out data.
+        end (Optional[str]): Ending UTC date after which to filter out data.
+        output_path (Optional[Path]): Filepath to output csv.
+
+    Returns:
+        pandas DataFrame: DataFrame containing OHLC data.
+    """
+    # Check if output path already exists and overwrite is False
+    if output_path is not None and output_path.exists() and not overwrite:
+        print(f"Output '{output_path}' already exists, skipping '{input_paths}'")
+        return
+
+    # Combine tick data from all paths into a single dataframe
+    df_tick_combined = pl.DataFrame(schema=TICK_SCHEMA_LEGACY_POLARS)
+    for input_path in input_paths:
+        df_tick = read_tick_csv(input_path)
+        df_tick_combined = df_tick_combined.vstack(df_tick)
+    df_tick_combined.rechunk()
+    df_tick_combined = df_tick_combined.sort(TIMESTAMP_COL)
+    assert valid_tick_df_polars(
+        df_tick_combined, combined=True
+    ), f"Combined tick data for {input_paths[0].parent} invalid!"
+
+    # Validate all paths belong to same ticker
+    tickers = df_tick_combined.unique(subset=[TICKER_COL], maintain_order=True)
+    unique_tickers = df_tick.select(pl.col(TICKER_COL).unique())
+    assert (
+        unique_tickers.shape[0] == 1
+    ), f"Tick data with mismatching tickers being combined! tickers={unique_tickers}"
+
+    process_tick_df(
+        df_tick=df_tick_combined,
+        timeframe=timeframe,
+        start=start,
+        end=end,
+        output_path=output_path,
+    )
+
+
+def main(args):
     assert not (
         (args.input_path is None and args.input_dir is None)
         or (args.input_path is not None and args.input_dir is not None)
-    ), "Exactly one of either '--input' or '--input_dir' must be specified!"
+    ), "Exactly one of either '--input_path' or '--input_dir' must be specified!"
+    assert not (
+        args.input_path is not None and (args.combine or args.recursive)
+    ), "'--combine' and '--recursive' can only be specified with '--input_dir'!"
+    assert not (
+        args.output_path is not None and args.output_dir is not None
+    ), "At most one of either '--output_path' or '--output_dir' must be specified!"
 
     if args.input_path is not None:
+        # Process single path
         input_path = Path(args.input_path)
         if not input_path.exists():
             raise OSError("Input path not found")
-        output_path = Path(args.output_path) if args.output_path else None
-        main(
+        output_path = None
+        if args.output_path is not None:
+            output_path = Path(args.output_path)
+        elif args.output_dir is not None:
+            output_path = get_output_path(
+                input_path=input_path, output_dir=Path(args.output_dir)
+            )
+        process_single_path(
             input_path=input_path,
             timeframe=args.timeframe,
             start=args.start,
             end=args.end,
             output_path=output_path,
+            overwrite=args.overwrite,
         )
     else:
-        for filename in glob.glob(args.input_dir + "/*.csv"):
-            input_path = Path(filename)
-
-            if not input_path.stem.endswith("USD"):
-                # Only process USD pairs
-                continue
-
-            output_path = (
-                (Path(args.output_dir) / f"{input_path.stem}_OHLC{input_path.suffix}")
-                if args.output_dir
-                else None
+        input_dir_path = Path(args.input_dir)
+        if not input_dir_path.exists():
+            raise OSError("Input dir path not found")
+        if not args.combine:
+            # Process each path into a separate OHLC output
+            input_paths = list(
+                input_dir_path.rglob("*.csv")
+                if args.recursive
+                else input_dir_path.glob("*.csv")
             )
-            main(
-                input_path=input_path,
-                timeframe=args.timeframe,
-                start=args.start,
-                end=args.end,
-                output_path=output_path,
-            )
+            for input_path in tqdm(input_paths):
+                output_path = (
+                    get_output_path(
+                        input_path=input_path, output_dir=Path(args.output_dir)
+                    )
+                    if args.output_dir
+                    else None
+                )
+                process_single_path(
+                    input_path=input_path,
+                    timeframe=args.timeframe,
+                    start=args.start,
+                    end=args.end,
+                    output_path=output_path,
+                    overwrite=args.overwrite,
+                )
+        else:
+            if not args.recursive:
+                # Process all paths in the input directory into a single OHLC output
+                input_paths = list(input_dir_path.glob("*.csv"))
+                output_path = None
+                if args.output_path is not None:
+                    output_path = Path(args.output_path)
+                elif args.output_dir is not None:
+                    output_path = get_combined_output_path(
+                        input_paths=input_paths, output_dir=Path(args.output_dir)
+                    )
+                process_multiple_paths(
+                    input_paths,
+                    timeframe=args.timeframe,
+                    start=args.start,
+                    end=args.end,
+                    output_path=output_path,
+                    overwrite=args.overwrite,
+                )
+            else:
+                # Recursively process paths in subdirectories into separate OHLC outputs
+                input_paths = list(input_dir_path.rglob("*.csv"))
+                subdirs = get_subdirectories(input_paths)
+                for subdir in tqdm(subdirs):
+                    input_paths = list(subdir.glob("*.csv"))
+                    output_path = (
+                        get_combined_output_path(
+                            input_paths=input_paths, output_dir=Path(args.output_dir)
+                        )
+                        if args.output_dir
+                        else None
+                    )
+                    process_multiple_paths(
+                        input_paths,
+                        timeframe=args.timeframe,
+                        start=args.start,
+                        end=args.end,
+                        output_path=output_path,
+                        overwrite=args.overwrite,
+                    )
+                return 0
+    return 0
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    exit(main(args))

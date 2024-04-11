@@ -1,10 +1,21 @@
 load("@pip_deps//:requirements.bzl", "requirement")
 
+py_library(
+    name = "constants",
+    srcs = [
+        "src/live/constants.py",
+    ],
+    imports = ["src"],
+    deps = [],
+    visibility = ["//visibility:public"]
+)
+
 py_binary(
     name="kraken",
-    srcs = [
-        "src/kraken/kraken.py",
+    srcs=[
+        "src/live/kraken.py"
     ],
+    main="kraken.py",
     deps = [
         requirement("ccxt"),
         requirement("pytz"),
@@ -13,17 +24,6 @@ py_binary(
         "//momentum/simulation:simulation",
         "//momentum/core:core",
         "//data:data",
-    ],
-)
-
-py_binary(
-    name="convert_kraken_symbols",
-    srcs = [
-        "src/kraken/convert_kraken_symbols.py",
-    ],
-    deps = [
-        requirement("ccxt"),
-        requirement("pytz"),
-        "//data:data",
+        ":constants",
     ],
 )

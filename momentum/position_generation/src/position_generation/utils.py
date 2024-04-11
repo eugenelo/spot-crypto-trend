@@ -19,23 +19,11 @@ def nonempty_positions(
         tickers_to_keep_lst = tickers_to_keep.copy()
     else:
         tickers_to_keep_lst = []
-    res = df_positions.sort_values(
-        by=[TIMESTAMP_COL, "rank"], ascending=[False, True]
-    ).loc[
+    res = df_positions.sort_values(by=[TIMESTAMP_COL], ascending=[False]).loc[
         (df_positions[POSITION_COL] > 0.0)
         | (df_positions[TICKER_COL].isin(tickers_to_keep_lst))
     ]
-    return res[
-        [
-            TIMESTAMP_COL,
-            TICKER_COL,
-            "30d_log_returns",
-            "rank",
-            "volume_consistent",
-            "30d_num_days_volume_above_5M",
-            POSITION_COL,
-        ]
-    ]
+    return res
 
 
 def validate_positions(df: pd.DataFrame, freq: str) -> bool:

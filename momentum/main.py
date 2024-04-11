@@ -18,12 +18,11 @@ from signal_generation.signal_generation import (
     create_analysis_signals,
     create_trading_signals,
 )
-from signal_generation.constants import SignalType
+from signal_generation.constants import get_signal_type
 from simulation.constants import DEFAULT_VOLUME_MAX_SIZE, DEFAULT_REBALANCING_BUFFER
-from position_generation.benchmark import generate_benchmark_btc
+from position_generation.benchmark import get_generate_benchmark_fn
 from position_generation.utils import nonempty_positions, Direction
-from position_generation.v1 import generate_positions_v1
-from position_generation.position_generation import generate_positions
+from position_generation.position_generation import get_generate_positions_fn
 from data.constants import TIMESTAMP_COL, TICKER_COL
 from data.utils import load_ohlc_to_hourly_filtered, load_ohlc_to_daily_filtered
 from core.constants import POSITION_COL, in_universe_excl_stablecoins
@@ -66,61 +65,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_signal_type(params: dict) -> SignalType:
-    if params["signal"] == "v1":
-        return SignalType.HistoricalReturns
-    elif params["signal"].startswith("rohrbach"):
-        return SignalType.Rohrbach
-    raise ValueError(
-        f"Unsupported 'generate_positions' argument: {params['generate_positions']}"
-    )
-
-
-def get_generate_positions(
-    params: dict, periods_per_day: int, lag_positions: bool
-) -> Callable:
-    if params["signal"] == "v1":
-        v1_params = params["params"]
-        generate_positions_fn = lambda df: generate_positions_v1(df, params=v1_params)
-    elif params["signal"].startswith("rohrbach"):
-        signal = params["signal"]
-        direction = Direction(params["direction"])
-        volatility_target = params.get("volatility_target", None)
-        cross_sectional_percentage = params.get("cross_sectional_percentage", None)
-        cross_sectional_equal_weight = params.get("cross_sectional_equal_weight", False)
-        min_daily_volume = params.get("min_daily_volume", None)
-        max_daily_volume = params.get("max_daily_volume", None)
-        leverage = params.get("leverage", 1.0)
-        generate_positions_fn = lambda df: generate_positions(
-            df,
-            signal=signal,
-            periods_per_day=periods_per_day,
-            direction=direction,
-            volatility_target=volatility_target,
-            cross_sectional_percentage=cross_sectional_percentage,
-            cross_sectional_equal_weight=cross_sectional_equal_weight,
-            min_daily_volume=min_daily_volume,
-            max_daily_volume=max_daily_volume,
-            leverage=leverage,
-            lag_positions=lag_positions,
-        )
-    else:
-        raise ValueError(
-            f"Unsupported 'generate_positions' argument: {params['generate_positions']}"
-        )
-    return generate_positions_fn
-
-
-def get_generate_benchmark(params: dict) -> Callable:
-    if params["generate_benchmark"] == "btc":
-        generate_benchmark = generate_benchmark_btc
-    else:
-        raise ValueError(
-            f"Unsupported 'generate_benchmark' argument: {params['generate_benchmark']}"
-        )
-    return generate_benchmark
-
-
 if __name__ == "__main__":
     np.set_printoptions(linewidth=1000)
     pd.set_option("display.width", 2000)
@@ -159,7 +103,7 @@ if __name__ == "__main__":
     assert "signal" in params, "Signal should be specified in params!"
     # Lag positions if backtesting
     lag_positions = args.mode != "positions"
-    generate_positions_fn = get_generate_positions(
+    generate_positions_fn = get_generate_positions_fn(
         params, periods_per_day=periods_per_day, lag_positions=lag_positions
     )
 
@@ -221,7 +165,7 @@ if __name__ == "__main__":
         assert (
             "generate_benchmark" in params
         ), "Benchmark generation function should be specified in params for backtest!"
-        generate_benchmark_fn = get_generate_benchmark(params)
+        generate_benchmark_fn = get_generate_benchmark_fn(params)
 
         backtest_crypto(
             df_analysis,
@@ -257,7 +201,7 @@ if __name__ == "__main__":
             output_path = Path(args.output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             nonempty_positions[[TIMESTAMP_COL, TICKER_COL, POSITION_COL]].to_csv(
-                str(output_path)
+                str(output_path), index=False
             )
             print(f"Wrote positions to '{output_path}'")
     else:

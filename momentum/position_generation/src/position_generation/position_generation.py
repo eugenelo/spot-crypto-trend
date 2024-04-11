@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import Optional
+from typing import Optional, Callable
 import static_frame as sf
 
 from position_generation.diversification_multipliers import (
@@ -42,6 +42,38 @@ from core.constants import (
 )
 from signal_generation.common import sort_dataframe, cross_sectional_abs_ema
 from signal_generation.volume import create_volume_filter_mask
+
+
+def get_generate_positions_fn(
+    params: dict, periods_per_day: int, lag_positions: bool
+) -> Callable:
+    if params["signal"].startswith("rohrbach"):
+        signal = params["signal"]
+        direction = Direction(params["direction"])
+        volatility_target = params.get("volatility_target", None)
+        cross_sectional_percentage = params.get("cross_sectional_percentage", None)
+        cross_sectional_equal_weight = params.get("cross_sectional_equal_weight", False)
+        min_daily_volume = params.get("min_daily_volume", None)
+        max_daily_volume = params.get("max_daily_volume", None)
+        leverage = params.get("leverage", 1.0)
+        generate_positions_fn = lambda df: generate_positions(
+            df,
+            signal=signal,
+            periods_per_day=periods_per_day,
+            direction=direction,
+            volatility_target=volatility_target,
+            cross_sectional_percentage=cross_sectional_percentage,
+            cross_sectional_equal_weight=cross_sectional_equal_weight,
+            min_daily_volume=min_daily_volume,
+            max_daily_volume=max_daily_volume,
+            leverage=leverage,
+            lag_positions=lag_positions,
+        )
+    else:
+        raise ValueError(
+            f"Unsupported 'generate_positions' argument: {params['generate_positions']}"
+        )
+    return generate_positions_fn
 
 
 def generate_positions(

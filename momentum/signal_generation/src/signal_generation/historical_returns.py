@@ -49,9 +49,13 @@ def create_historical_return_signals(
         )
         # Quintiles
         decile_colname = f"{lookback_days}d_returns_decile"
-        df[decile_colname] = bins(df, column=ret_colname, num_bins=10)
+        df[decile_colname] = bins(
+            df, column=ret_colname, num_bins=10, duplicates="drop"
+        )
         decile_colname = f"{lookback_days}d_log_returns_decile"
-        df[decile_colname] = bins(df, column=logret_colname, num_bins=10)
+        df[decile_colname] = bins(
+            df, column=logret_colname, num_bins=10, duplicates="drop"
+        )
 
     # Add helper cols
     df["day"] = pd.DatetimeIndex(df[TIMESTAMP_COL]).day

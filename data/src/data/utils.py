@@ -1,7 +1,8 @@
 import pandas as pd
+import polars as pl
 import pytz
 import re
-from typing import Callable
+from typing import Callable, Optional, List
 
 from data.constants import (
     TIMESTAMP_COL,
@@ -14,11 +15,15 @@ from data.constants import (
     DOLLAR_VOLUME_COL,
     TICKER_COL,
     OHLC_COLUMNS,
+    ID_COL,
 )
 
 
 def load_ohlc_to_daily_filtered(
-    input_path: str, input_freq: str, tz: pytz.timezone, whitelist_fn: Callable
+    input_path: str,
+    input_freq: str,
+    tz: pytz.timezone,
+    whitelist_fn: Optional[Callable],
 ) -> pd.DataFrame:
     return _load_ohlc_to_dataframe_filtered(
         input_path=input_path,
@@ -30,7 +35,10 @@ def load_ohlc_to_daily_filtered(
 
 
 def load_ohlc_to_hourly_filtered(
-    input_path: str, input_freq: str, tz: pytz.timezone, whitelist_fn: Callable
+    input_path: str,
+    input_freq: str,
+    tz: pytz.timezone,
+    whitelist_fn: Optional[Callable],
 ) -> pd.DataFrame:
     return _load_ohlc_to_dataframe_filtered(
         input_path=input_path,
@@ -47,10 +55,12 @@ def load_ohlc_csv(input_path: str) -> pd.DataFrame:
     return df
 
 
-def validate_data(df: pd.DataFrame, freq: str) -> bool:
+def valid_ohlc_dataframe(df: pd.DataFrame, freq: str) -> bool:
     # Ensure that no duplicate rows exist for (ticker, timestamp) combination
     duplicate = df.duplicated(subset=[TICKER_COL, TIMESTAMP_COL], keep=False)
-    assert not duplicate.any(), df.loc[duplicate]
+    if duplicate.any():
+        print(f"Duplicate data: {df.loc[duplicate]}")
+        return False
 
     # Ensure that no gaps exist between dates
     tickers = df[TICKER_COL].unique()
@@ -60,7 +70,9 @@ def validate_data(df: pd.DataFrame, freq: str) -> bool:
         end_date = df_ticker[TIMESTAMP_COL].max()  # End of your data
         full_date_range = pd.date_range(start=start_date, end=end_date, freq=freq)
         missing_dates = full_date_range.difference(df_ticker[TIMESTAMP_COL])
-        assert missing_dates.empty, f"{ticker}: {missing_dates}"
+        if not missing_dates.empty:
+            print(f"Missing Dates: {ticker} - {missing_dates}")
+            return False
 
     return True
 
@@ -75,7 +87,7 @@ def _load_ohlc_to_dataframe_filtered(
     input_freq: str,
     tz: pytz.timezone,
     output_freq: str,
-    whitelist_fn: Callable,
+    whitelist_fn: Optional[Callable],
 ) -> pd.DataFrame:
     SUPPORTED_OUTPUT_FREQ = ["1h", "1d", input_freq]
     assert (
@@ -95,14 +107,12 @@ def _load_ohlc_to_dataframe_filtered(
         else:
             print("Can't relocalize daily data! Ignoring input tz!")
 
-    resampled_data = False
     if input_freq == output_freq:
         # No resampling required
         pass
     elif re.match(hourly_freq_pattern, input_freq) and output_freq == "1d":
         # Resample hourly to daily
         df = _resample_ohlc_hour_to_day(df)
-        resampled_data = True
     else:
         raise ValueError(
             f"Unsupported data frequency pair! input_freq={input_freq}, output_freq={output_freq}"
@@ -110,15 +120,13 @@ def _load_ohlc_to_dataframe_filtered(
 
     df = df.reset_index()
     df = df.sort_values(by=[TICKER_COL, TIMESTAMP_COL], ascending=True)
-    if resampled_data:
-        # Fill dates with no data using the previous day. Volume will still be 0.
-        df = df.ffill()
 
     # Filter blacklisted symbol pairs
-    df = filter_universe(df=df, whitelist_fn=whitelist_fn)
+    if whitelist_fn is not None:
+        df = filter_universe(df=df, whitelist_fn=whitelist_fn)
 
     # Validate data, expects timestamp to be a column and not the index
-    if not validate_data(df=df, freq=output_freq):
+    if not valid_ohlc_dataframe(df=df, freq=output_freq):
         raise ValueError("Invalid data!")
     return df
 
@@ -127,7 +135,7 @@ def _resample_ohlc_hour_to_day(df_hourly: pd.DataFrame) -> pd.DataFrame:
     # Convert hourly to daily OHLC
     df_daily = (
         df_hourly.groupby(TICKER_COL)
-        .resample("D")
+        .resample(rule="D", convention="start")
         .agg(
             {
                 OPEN_COL: "first",
@@ -144,3 +152,85 @@ def _resample_ohlc_hour_to_day(df_hourly: pd.DataFrame) -> pd.DataFrame:
     df_daily[TIMESTAMP_COL] = pd.to_datetime(df_daily[TIMESTAMP_COL])
     df_daily = df_daily.sort_values(by=[TICKER_COL, TIMESTAMP_COL])
     return df_daily
+
+
+def missing_elements(lst: List[int]) -> List[int]:
+    start, end = lst[0], lst[-1]
+    return sorted(set(range(start, end + 1)).difference(lst))
+
+
+def valid_tick_df_pandas(df: pd.DataFrame, combined: bool) -> bool:
+    # Missing elements in sequence
+    missing_ids = missing_elements(df[ID_COL].to_list())
+    if len(missing_ids) > 0:
+        print(f"Missing IDs: {missing_ids}")
+        return False
+
+    # Duplicate IDs
+    duplicate = df.duplicated(subset=[ID_COL], keep=False)
+    if duplicate.any():
+        print(f"Duplicate data: \n{df.loc[duplicate]}")
+        return False
+
+    # Number of elements
+    if combined:
+        num_rows = df.shape[0]
+        max_id = df[ID_COL].max()
+        if num_rows != max_id:
+            print(f"Num Rows Mismatch: num_rows ({num_rows}) != max_id ({max_id})")
+            return False
+
+    return True
+
+
+def valid_tick_df_polars(df: pl.DataFrame, combined: bool) -> bool:
+    # Missing elements in sequence
+    missing_ids = missing_elements(df[ID_COL].to_list())
+    if len(missing_ids) > 0:
+        print(f"Missing IDs: {missing_ids}")
+        return False
+
+    # Duplicate IDs
+    duplicate = df.filter(pl.any_horizontal(pl.col(ID_COL).is_duplicated()))
+    if not duplicate.is_empty():
+        print(f"Duplicate data: {duplicate}")
+        return False
+
+    # Number of elements
+    if combined:
+        num_rows = df.select(pl.count()).item()
+        max_id = df.select(pl.max(ID_COL)).item()
+        if num_rows != max_id:
+            print(f"Num Rows Mismatch: num_rows ({num_rows}) != max_id ({max_id})")
+            return False
+
+    return True
+
+
+def interpolate_missing_ids(ids: pd.Series) -> pd.Series:
+    # Try correcting with both ffill and bfill
+    for method in ("ffill", "bfill"):
+        missing_ids = ids.isna()
+        if method == "ffill":
+            missing_cumsum = missing_ids.cumsum()
+            interp_offset = missing_cumsum - missing_cumsum.where(
+                ~missing_ids
+            ).ffill().fillna(0)
+            ids = ids.ffill() + interp_offset
+        else:
+            missing_cumsum = missing_ids[::-1].cumsum()[::-1]
+            interp_offset = missing_cumsum - missing_cumsum.where(
+                ~missing_ids
+            ).bfill().fillna(0)
+            ids = ids.bfill() - interp_offset
+
+        try:
+            ids = ids.astype(int)
+            break
+        except pd.errors.IntCastingNaNError:
+            continue
+
+    if ids.isna().any():
+        # Interpolation failed
+        raise RuntimeError("ID interpolation failed")
+    return ids

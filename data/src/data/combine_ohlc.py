@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 import glob
+from tqdm.auto import tqdm
 
 from data.constants import TIMESTAMP_COL, TICKER_COL, OHLC_COLUMNS
 
@@ -33,7 +34,7 @@ def main(
     """
     df_ohlc = pd.DataFrame(columns=OHLC_COLUMNS)
 
-    for filename in glob.glob(args.input_dir + "/*.csv"):
+    for filename in tqdm(sorted(glob.glob(args.input_dir + "/*.csv"))):
         input_path = Path(filename)
         print(f"Processing {input_path}")
 
@@ -42,18 +43,15 @@ def main(
             df_ohlc = pd.concat([df_ohlc, df_single], ignore_index=True)
 
     # Remove duplicates
+    df_ohlc[TIMESTAMP_COL] = pd.to_datetime(df_ohlc[TIMESTAMP_COL], utc=True)
+    df_ohlc.drop_duplicates(subset=[TIMESTAMP_COL, TICKER_COL], inplace=True)
     df_ohlc.sort_values(by=[TIMESTAMP_COL, TICKER_COL], ascending=True, inplace=True)
-    df_ohlc.drop_duplicates(
-        subset=[TIMESTAMP_COL, TICKER_COL],
-        keep="first",  # Keep the latest available data
-        inplace=True,
-    )
     df_ohlc.index = pd.RangeIndex(len(df_ohlc.index))
 
     # Output file
     output_path = Path(args.output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    df_ohlc.to_csv(str(output_path))
+    df_ohlc.to_csv(str(output_path), index=False)
     print(f"Converted files from '{input_dir}' into final file '{output_path}'")
 
 

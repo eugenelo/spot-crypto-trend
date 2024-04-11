@@ -27,7 +27,7 @@ def returns(df: pd.DataFrame, column: str, periods: int) -> pd.Series:
     Returns:
         pd.Series: Returns per ticker over periods
     """
-    return df.groupby(TICKER_COL)[column].pct_change(periods=periods)
+    return df.groupby(TICKER_COL)[column].pct_change(periods=periods, fill_method=None)
 
 
 def log_returns(df: pd.DataFrame, column: str, periods: int) -> pd.Series:
@@ -183,18 +183,21 @@ def rolling_sum(df: pd.DataFrame, column: str, periods: int) -> pd.Series:
     )
 
 
-def bins(df: pd.DataFrame, column: str, num_bins: int) -> pd.Series:
+def bins(
+    df: pd.DataFrame, column: str, num_bins: int, duplicates: str = "raise"
+) -> pd.Series:
     """Bin data into num_bins
 
     Args:
         df (pd.DataFrame): DataFrame containing [TICKER_COL, column] columns
         column (str): Column over which to bin data
         num_bins (int): Number of bins
+        duplicates (str): Policy for dealing with duplicates
 
     Returns:
         pd.Series: Bins of column
     """
-    return pd.qcut(df[column], num_bins, labels=False)
+    return pd.qcut(df[column], num_bins, labels=False, duplicates=duplicates)
 
 
 def cross_sectional_abs_ema(
