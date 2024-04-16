@@ -1,9 +1,10 @@
 from enum import Enum
-import pandas as pd
-from typing import Optional, List
+from typing import List, Optional
 
-from data.constants import TIMESTAMP_COL, TICKER_COL
+import pandas as pd
+
 from core.constants import POSITION_COL
+from data.constants import TICKER_COL, TIMESTAMP_COL
 
 
 class Direction(Enum):

@@ -1,22 +1,18 @@
-import pandas as pd
-import numpy as np
-import static_frame as sf
 from functools import cache
-from typing import Optional, List
-from scipy.interpolate import interp1d
-import statsmodels.api as sm
 
+import numpy as np
+import pandas as pd
+import static_frame as sf
+import statsmodels.api as sm
+from scipy.interpolate import interp1d
+
+from data.constants import TICKER_COL, TIMESTAMP_COL
 from position_generation.constants import (
-    IDM_COL,
     FDM_COL,
-    SCALED_SIGNAL_COL,
+    IDM_COL,
     IDM_REFRESH_PERIOD,
+    SCALED_SIGNAL_COL,
 )
-from data.constants import (
-    TIMESTAMP_COL,
-    TICKER_COL,
-)
-from core.constants import POSITION_COL
 
 
 @cache
@@ -163,7 +159,7 @@ def get_vol_target_scaling_lowess_fn():
         200.0: 64.68,
     }
     vol_target_to_scaling = {
-        k / 100: (k / v)
+        k / 100: k / v
         for (k, v) in vol_target_to_realized.items()
         if (k >= 0.0 and k <= 100.0)
     }

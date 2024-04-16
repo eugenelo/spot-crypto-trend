@@ -3,6 +3,8 @@ setup: requirements.txt
 
 lint:
 	black . --check
+	flake8 .
 
 fix:
-	black .
+	isort .
+	black . --preview

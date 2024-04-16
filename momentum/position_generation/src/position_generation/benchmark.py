@@ -1,8 +1,9 @@
-import pandas as pd
 from typing import Callable
 
-from data.constants import TICKER_COL
+import pandas as pd
+
 from core.constants import POSITION_COL
+from data.constants import TICKER_COL
 
 
 def get_generate_benchmark_fn(params: dict) -> Callable:

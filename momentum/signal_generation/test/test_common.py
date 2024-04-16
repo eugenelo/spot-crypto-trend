@@ -1,23 +1,23 @@
-import pandas as pd
-import numpy as np
 import unittest
 from datetime import timedelta
 
+import numpy as np
+import pandas as pd
+
+from data.constants import CLOSE_COL, TICKER_COL, TIMESTAMP_COL
 from signal_generation.common import (
-    sort_dataframe,
-    returns,
-    log_returns,
-    future_returns,
-    future_log_returns,
+    bins,
     ema,
     ema_daily,
-    volatility,
+    future_log_returns,
+    future_returns,
     future_volatility,
-    volatility_ema,
+    log_returns,
+    returns,
     rolling_sum,
-    bins,
+    sort_dataframe,
+    volatility,
 )
-from data.constants import TIMESTAMP_COL, TICKER_COL, CLOSE_COL
 
 
 class TestSimulationUtils(unittest.TestCase):
@@ -56,7 +56,6 @@ class TestSimulationUtils(unittest.TestCase):
         A_mask = df_prices[TICKER_COL] == "A"
         B_mask = df_prices[TICKER_COL] == "B"
         prices_A = df_prices.loc[A_mask][CLOSE_COL]
-        prices_B = df_prices.loc[B_mask][CLOSE_COL]
 
         # 1 period returns
         df_prices["returns"] = returns(df_prices, column=CLOSE_COL, periods=1)
@@ -101,7 +100,6 @@ class TestSimulationUtils(unittest.TestCase):
         A_mask = df_prices[TICKER_COL] == "A"
         B_mask = df_prices[TICKER_COL] == "B"
         prices_A = df_prices.loc[A_mask][CLOSE_COL]
-        prices_B = df_prices.loc[B_mask][CLOSE_COL]
 
         # 1 period returns
         df_prices["log_returns"] = log_returns(df_prices, column=CLOSE_COL, periods=1)

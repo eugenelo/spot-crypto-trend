@@ -1,13 +1,9 @@
 import argparse
-import ccxt
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-import requests
-from typing import Optional
 from pathlib import Path
 
-import sys
+import ccxt
+import numpy as np
+import pandas as pd
 
 from data.constants import TICKER_COL
 from data.utils import load_ohlc_csv
@@ -69,7 +65,7 @@ def main(args):
     kraken = ccxt.kraken(
         {
             "apiKey": "EvqEd6Mn/yPHovibTJXKl0UAnoQPvs7yxRIPO/AOj4ifbavMH66M1HYF",
-            "secret": "8w9/RnVsau3IKNH0/cYliHr+pqroxAAR0qecaKscYBVyFRaOerUerVOLiGpCLO/aduyTpdaSRU4xgl+4ERQl5w==",
+            "secret": "8w9/RnVsau3IKNH0/cYliHr+pqroxAAR0qecaKscYBVyFRaOerUerVOLiGpCLO/aduyTpdaSRU4xgl+4ERQl5w==",  # noqa: B950
             "enableRateLimit": True,
         }
     )

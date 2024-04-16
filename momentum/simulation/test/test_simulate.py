@@ -1,17 +1,17 @@
 import unittest
-import pandas as pd
-import numpy as np
 from datetime import timedelta
 
+import numpy as np
+import pandas as pd
+
 from simulation.vbt import (
-    vbt,
-    simulate,
     ENTRY_TIMESTAMP_COL,
-    EXIT_TIMESTAMP_COL,
+    get_cash,
     get_entry_trades,
     get_exit_trades,
-    get_cash,
     get_final_value,
+    simulate,
+    vbt,
 )
 
 

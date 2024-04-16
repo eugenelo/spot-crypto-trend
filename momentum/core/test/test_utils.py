@@ -1,9 +1,9 @@
-import pandas as pd
 import unittest
-import datetime
+
+import pandas as pd
 
 from core.utils import apply_hysteresis, get_periods_per_day
-from data.constants import TIMESTAMP_COL, TICKER_COL, PRICE_COL
+from data.constants import PRICE_COL, TICKER_COL, TIMESTAMP_COL
 
 
 class TestSimulationUtils(unittest.TestCase):

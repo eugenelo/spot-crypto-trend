@@ -1,22 +1,25 @@
 import re
-from io import StringIO
-from datetime import datetime, timedelta
-
-from pathlib import Path
-import requests
-import pandas as pd
-from typing import List
 import time
+from datetime import datetime, timedelta
+from io import StringIO
+from pathlib import Path
+from typing import List
+
+import pandas as pd
+import requests
 
 
 class YahooFinanceHistory:
     timeout = 2
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.61 Safari/537.36"
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like"
+            " Gecko) Chrome/94.0.4606.61 Safari/537.36"
+        )
     }
     crumb_link = "https://finance.yahoo.com/quote/{0}/history?p={0}"
     crumble_regex = r'"crumb":"(.*?)"'
-    quote_link = "https://query1.finance.yahoo.com/v7/finance/download/{quote}?period1={dfrom}&period2={dto}&interval=1d&events=history&crumb={crumb}"
+    quote_link = "https://query1.finance.yahoo.com/v7/finance/download/{quote}?period1={dfrom}&period2={dto}&interval=1d&events=history&crumb={crumb}"  # noqa: B950
 
     def __init__(self, symbol, days_back=7):
         self.symbol = symbol

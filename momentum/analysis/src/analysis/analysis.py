@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.express as px
 from scipy import stats
 
-from data.constants import TICKER_COL
+from data.constants import TICKER_COL  # noqa: F401
 
 
 def analysis(

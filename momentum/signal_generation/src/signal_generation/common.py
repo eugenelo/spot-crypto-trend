@@ -1,7 +1,7 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-from data.constants import TIMESTAMP_COL, TICKER_COL
+from data.constants import TICKER_COL, TIMESTAMP_COL
 
 
 def sort_dataframe(df: pd.DataFrame) -> pd.DataFrame:

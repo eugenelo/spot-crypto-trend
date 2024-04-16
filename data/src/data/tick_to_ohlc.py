@@ -1,30 +1,32 @@
 import argparse
-import polars as pl
-import pandas as pd
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional, List
-import datetime
-import glob
+from typing import List, Optional
+
+import pandas as pd
+import polars as pl
+import pytz
 from tqdm.auto import tqdm
 
 from data.constants import (
-    TIMESTAMP_COL,
-    OPEN_COL,
-    HIGH_COL,
-    LOW_COL,
     CLOSE_COL,
-    VWAP_COL,
-    VOLUME_COL,
     DOLLAR_VOLUME_COL,
-    TICKER_COL,
-    PRICE_COL,
+    HIGH_COL,
     ID_COL,
+    LOW_COL,
+    OPEN_COL,
     ORDER_SIDE_COL,
     ORDER_TYPE_COL,
+    PRICE_COL,
     TICK_COLUMNS,
     TICK_COLUMNS_LEGACY,
-    TICK_SCHEMA_POLARS,
     TICK_SCHEMA_LEGACY_POLARS,
+    TICK_SCHEMA_POLARS,
+    TICKER_COL,
+    TIMESTAMP_COL,
+    VOLUME_COL,
+    VWAP_COL,
 )
 from data.utils import valid_tick_df_polars
 
@@ -39,10 +41,19 @@ def parse_args():
         "--timeframe", "-t", type=str, default="1h", help="1m / 1h / 1d / etc."
     )
     parser.add_argument(
+        "--auto",
+        "-a",
+        action="store_true",
+        help=(
+            "Automatic update mode - overwrite only the latest monthly file based on"
+            " the current date"
+        ),
+    )
+    parser.add_argument(
         "--combine",
         "-c",
         action="store_true",
-        help="Combine all input data into single output file",
+        help="Combine input data from the same (sub)directory into single output file",
     )
     parser.add_argument(
         "--recursive",
@@ -109,7 +120,8 @@ def read_tick_csv(input_path: Path) -> pl.DataFrame:
 
 def get_ticker_from_filepath(input_path: Path) -> str:
     """
-    Get ticker name from input path (assume filename is formatted '{ticker}_{suffix}.csv')
+    Get ticker name from input path (assume filename is formatted
+    '{ticker}_{suffix}.csv')
 
     Args:
         input_path (Path): Input path
@@ -123,13 +135,24 @@ def get_ticker_from_filepath(input_path: Path) -> str:
     return f"{ticker[:usd_offset]}/{ticker[usd_offset:]}"
 
 
+def get_symbol_output_dir(output_dir: Path, symbol: str) -> Path:
+    symbol_str_clean = symbol.replace("/", "")
+    return Path(output_dir) / Path(symbol_str_clean)
+
+
 def get_output_path(input_path: Path, output_dir: Path) -> Path:
-    return Path(output_dir) / f"{input_path.stem}_OHLC{input_path.suffix}"
+    symbol = get_ticker_from_filepath(input_path=input_path)
+    return (
+        get_symbol_output_dir(output_dir=output_dir, symbol=symbol)
+        / f"{input_path.stem}_OHLC{input_path.suffix}"
+    )
 
 
 def get_combined_output_path(input_paths: List[Path], output_dir: Path) -> Path:
     input_path = input_paths[0]
-    return Path(output_dir) / f"{input_path.stem.split('_')[0]}_OHLC{input_path.suffix}"
+    symbol = get_ticker_from_filepath(input_path=input_path)
+    symbol_str_clean = symbol.replace("/", "")
+    return Path(output_dir) / f"{symbol_str_clean}_OHLC{input_path.suffix}"
 
 
 def get_subdirectories(filepaths: List[Path]) -> List[Path]:
@@ -140,7 +163,10 @@ def get_subdirectories(filepaths: List[Path]) -> List[Path]:
 
 
 def tick_to_ohlc(
-    df_tick: pl.DataFrame, timeframe: str, start: Optional[str], end: Optional[str]
+    df_tick: pl.DataFrame,
+    timeframe: str,
+    start: Optional[str],
+    end: Optional[str],
 ):
     """
     Convert tick data to OHLC data.
@@ -159,9 +185,7 @@ def tick_to_ohlc(
 
     # Convert timestamp column to datetime
     df_tick = df_tick.with_columns(
-        pl.col(TIMESTAMP_COL).map_elements(
-            lambda x: datetime.datetime.utcfromtimestamp(x)
-        )
+        pl.col(TIMESTAMP_COL).map_elements(lambda x: datetime.utcfromtimestamp(x))
     ).sort(TIMESTAMP_COL)
 
     if start is not None:
@@ -209,6 +233,7 @@ def tick_to_ohlc(
             pl.col(TICKER_COL).fill_null(pl.col(TICKER_COL).first()),
         ]
     )
+
     return df_ohlcv
 
 
@@ -219,7 +244,12 @@ def process_tick_df(
     end: Optional[str],
     output_path: Optional[Path],
 ):
-    ohlc = tick_to_ohlc(df_tick=df_tick, timeframe=timeframe, start=start, end=end)
+    ohlc = tick_to_ohlc(
+        df_tick=df_tick,
+        timeframe=timeframe,
+        start=start,
+        end=end,
+    )
 
     if output_path is None:
         # Print data
@@ -229,7 +259,8 @@ def process_tick_df(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         ohlc.write_csv(output_path)
         print(
-            f"Converted {df_tick.shape} dataframe into {args.timeframe} OHLC data at {output_path}"
+            f"Converted {df_tick.shape} dataframe into {args.timeframe} OHLC data at"
+            f" {output_path}"
         )
 
 
@@ -309,8 +340,7 @@ def process_multiple_paths(
     ), f"Combined tick data for {input_paths[0].parent} invalid!"
 
     # Validate all paths belong to same ticker
-    tickers = df_tick_combined.unique(subset=[TICKER_COL], maintain_order=True)
-    unique_tickers = df_tick.select(pl.col(TICKER_COL).unique())
+    unique_tickers = df_tick_combined.select(pl.col(TICKER_COL).unique())
     assert (
         unique_tickers.shape[0] == 1
     ), f"Tick data with mismatching tickers being combined! tickers={unique_tickers}"
@@ -324,6 +354,76 @@ def process_multiple_paths(
     )
 
 
+@dataclass
+class FailedJob:
+    input_path: Optional[str]
+    input_dir: Optional[str]
+    output_path: Optional[str]
+    timeframe: str
+    start: Optional[str]
+    end: Optional[str]
+    overwrite: bool
+
+
+def filter_auto_update_paths(path: Path, write_start_date: datetime) -> bool:
+    """Filter function for `--auto` input paths
+
+    Filter paths to only those with an end date within 7 days of write_start_date.
+
+    Args:
+        path (Path): _description_
+        write_start_date (datetime): _description_
+
+    Returns:
+        bool: True if path should be filtered out from processing
+    """
+    ticker, path_start, path_end = path.stem.split("_")
+    path_start = pytz.utc.localize(datetime.strptime(path_start, "%Y-%m-%d"))
+    path_end = pytz.utc.localize(datetime.strptime(path_end, "%Y-%m-%d"))
+    return write_start_date > path_end
+
+
+def auto_update(input_dir: Path, output_dir: Path, timeframe: str) -> List[FailedJob]:
+    today = pytz.utc.localize(datetime.now())
+    write_start_date = today - timedelta(days=7)
+    overwrite = True
+    failed_jobs: List[FailedJob] = []
+    input_paths = sorted(list(input_dir.rglob("*.csv")))
+    for input_path in tqdm(input_paths):
+        output_path = get_output_path(input_path=input_path, output_dir=output_dir)
+        # Only overwrite existing files with an end date within 7 days of today
+        if output_path.exists():
+            if filter_auto_update_paths(
+                path=input_path, write_start_date=write_start_date
+            ):
+                print(f"{output_path} already exists, skipping!")
+                continue
+        try:
+            process_single_path(
+                input_path=input_path,
+                timeframe=timeframe,
+                start=None,
+                end=None,
+                output_path=output_path,
+                overwrite=overwrite,
+            )
+        except Exception as e:
+            print(e)
+            failed_jobs.append(
+                FailedJob(
+                    input_path=input_path,
+                    input_dir=None,
+                    output_path=output_path,
+                    timeframe=args.timeframe,
+                    start=None,
+                    end=None,
+                    overwrite=overwrite,
+                )
+            )
+            continue
+    return failed_jobs
+
+
 def main(args):
     assert not (
         (args.input_path is None and args.input_dir is None)
@@ -335,86 +435,112 @@ def main(args):
     assert not (
         args.output_path is not None and args.output_dir is not None
     ), "At most one of either '--output_path' or '--output_dir' must be specified!"
+    assert not (
+        args.auto
+        and (
+            args.combine
+            or args.recursive
+            or args.overwrite
+            or args.start
+            or args.end
+            or args.input_path
+            or args.output_path
+        )
+    ), "'--auto' can only be used with '--input_dir' and '--output_dir' (optional)"
 
-    if args.input_path is not None:
-        # Process single path
-        input_path = Path(args.input_path)
-        if not input_path.exists():
-            raise OSError("Input path not found")
-        output_path = None
-        if args.output_path is not None:
-            output_path = Path(args.output_path)
-        elif args.output_dir is not None:
-            output_path = get_output_path(
-                input_path=input_path, output_dir=Path(args.output_dir)
-            )
-        process_single_path(
-            input_path=input_path,
+    if args.auto:
+        # Automatic update
+        input_dir = Path(args.input_dir)
+        if not input_dir.exists():
+            raise OSError("Input dir path not found")
+        output_dir = Path(args.output_dir) if args.output_dir else None
+        if not output_dir:
+            raise ValueError("'--output_dir' not specified, required for '--auto'")
+        elif not output_dir.exists():
+            raise OSError("Output dir path not found")
+        failed_jobs = auto_update(
+            input_dir=input_dir,
+            output_dir=output_dir,
             timeframe=args.timeframe,
-            start=args.start,
-            end=args.end,
-            output_path=output_path,
-            overwrite=args.overwrite,
         )
     else:
-        input_dir_path = Path(args.input_dir)
-        if not input_dir_path.exists():
-            raise OSError("Input dir path not found")
-        if not args.combine:
-            # Process each path into a separate OHLC output
-            input_paths = list(
-                input_dir_path.rglob("*.csv")
-                if args.recursive
-                else input_dir_path.glob("*.csv")
+        if args.input_path is not None:
+            # Process single path
+            input_path = Path(args.input_path)
+            if not input_path.exists():
+                raise OSError("Input path not found")
+            output_path = None
+            if args.output_path is not None:
+                output_path = Path(args.output_path)
+            elif args.output_dir is not None:
+                output_path = get_output_path(
+                    input_path=input_path, output_dir=Path(args.output_dir)
+                )
+            process_single_path(
+                input_path=input_path,
+                timeframe=args.timeframe,
+                start=args.start,
+                end=args.end,
+                output_path=output_path,
+                overwrite=args.overwrite,
             )
-            for input_path in tqdm(input_paths):
-                output_path = (
-                    get_output_path(
-                        input_path=input_path, output_dir=Path(args.output_dir)
-                    )
-                    if args.output_dir
-                    else None
-                )
-                process_single_path(
-                    input_path=input_path,
-                    timeframe=args.timeframe,
-                    start=args.start,
-                    end=args.end,
-                    output_path=output_path,
-                    overwrite=args.overwrite,
-                )
         else:
-            if not args.recursive:
-                # Process all paths in the input directory into a single OHLC output
-                input_paths = list(input_dir_path.glob("*.csv"))
-                output_path = None
-                if args.output_path is not None:
-                    output_path = Path(args.output_path)
-                elif args.output_dir is not None:
-                    output_path = get_combined_output_path(
-                        input_paths=input_paths, output_dir=Path(args.output_dir)
+            input_dir = Path(args.input_dir)
+            if not input_dir.exists():
+                raise OSError("Input dir path not found")
+
+            failed_jobs: List[FailedJob] = []
+            if not args.combine:
+                # Process each path into a separate OHLC output
+                input_paths = sorted(
+                    list(
+                        input_dir.rglob("*.csv")
+                        if args.recursive
+                        else input_dir.glob("*.csv")
                     )
-                process_multiple_paths(
-                    input_paths,
-                    timeframe=args.timeframe,
-                    start=args.start,
-                    end=args.end,
-                    output_path=output_path,
-                    overwrite=args.overwrite,
                 )
-            else:
-                # Recursively process paths in subdirectories into separate OHLC outputs
-                input_paths = list(input_dir_path.rglob("*.csv"))
-                subdirs = get_subdirectories(input_paths)
-                for subdir in tqdm(subdirs):
-                    input_paths = list(subdir.glob("*.csv"))
+                for input_path in tqdm(input_paths):
                     output_path = (
-                        get_combined_output_path(
-                            input_paths=input_paths, output_dir=Path(args.output_dir)
+                        get_output_path(
+                            input_path=input_path, output_dir=Path(args.output_dir)
                         )
                         if args.output_dir
                         else None
                     )
+                    try:
+                        process_single_path(
+                            input_path=input_path,
+                            timeframe=args.timeframe,
+                            start=args.start,
+                            end=args.end,
+                            output_path=output_path,
+                            overwrite=args.overwrite,
+                        )
+                    except Exception as e:
+                        print(e)
+                        failed_jobs.append(
+                            FailedJob(
+                                input_path=input_path,
+                                input_dir=None,
+                                output_path=output_path,
+                                timeframe=args.timeframe,
+                                start=args.start,
+                                end=args.end,
+                                overwrite=args.overwrite,
+                            )
+                        )
+                        continue
+            else:
+                if not args.recursive:
+                    # Process all paths in the input directory into a single OHLC output
+                    input_paths = sorted(list(input_dir.glob("*.csv")))
+                    output_path = None
+                    if args.output_path is not None:
+                        output_path = Path(args.output_path)
+                    elif args.output_dir is not None:
+                        output_path = get_combined_output_path(
+                            input_paths=input_paths, output_dir=Path(args.output_dir)
+                        )
                     process_multiple_paths(
                         input_paths,
                         timeframe=args.timeframe,
@@ -423,7 +549,49 @@ def main(args):
                         output_path=output_path,
                         overwrite=args.overwrite,
                     )
-                return 0
+                else:
+                    # Recursively process paths in subdirs into separate OHLC outputs
+                    input_paths = sorted(list(input_dir.rglob("*.csv")))
+                    subdirs = get_subdirectories(input_paths)
+                    for subdir in tqdm(subdirs):
+                        input_paths = sorted(list(subdir.glob("*.csv")))
+                        output_path = (
+                            get_combined_output_path(
+                                input_paths=input_paths,
+                                output_dir=Path(args.output_dir),
+                            )
+                            if args.output_dir
+                            else None
+                        )
+                        try:
+                            process_multiple_paths(
+                                input_paths,
+                                timeframe=args.timeframe,
+                                start=args.start,
+                                end=args.end,
+                                output_path=output_path,
+                                overwrite=args.overwrite,
+                            )
+                        except Exception as e:
+                            print(e)
+                            failed_jobs.append(
+                                FailedJob(
+                                    input_path=None,
+                                    input_dir=subdir,
+                                    output_path=output_path,
+                                    timeframe=args.timeframe,
+                                    start=args.start,
+                                    end=args.end,
+                                    overwrite=args.overwrite,
+                                )
+                            )
+                            continue
+
+    if len(failed_jobs) > 0:
+        print("Failed Jobs:")
+        for failed_job in failed_jobs:
+            print(f"\t- {failed_job}")
+        return 1
     return 0
 
 

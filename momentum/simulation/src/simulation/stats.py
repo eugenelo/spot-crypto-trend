@@ -1,27 +1,21 @@
-import plotly.express as px
-import pandas as pd
-from typing import List
 from functools import reduce
+from typing import List
+
+import pandas as pd
+import plotly.express as px
 
 from data.constants import TIMESTAMP_COL
-from core.constants import POSITION_COL
-from position_generation.constants import (
-    NUM_OPEN_LONG_POSITIONS_COL,
-    NUM_OPEN_SHORT_POSITIONS_COL,
-    NUM_OPEN_POSITIONS_COL,
-)
 from simulation.vbt import (
-    vbt,
     ENTRY_TIMESTAMP_COL,
     EXIT_TIMESTAMP_COL,
-    get_entry_trades,
-    get_exit_trades,
-    get_value,
-    get_final_value,
-    get_returns,
-    get_cumulative_returns,
     get_annualized_return,
     get_annualized_volatility,
+    get_cumulative_returns,
+    get_entry_trades,
+    get_exit_trades,
+    get_returns,
+    get_value,
+    vbt,
 )
 
 

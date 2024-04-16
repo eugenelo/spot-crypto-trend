@@ -1,20 +1,15 @@
 import argparse
-import pandas as pd
-import numpy as np
-from typing import Optional, List, Tuple
+from datetime import datetime
 from pathlib import Path
-import time
-from datetime import datetime, timedelta, time as datetime_time
-from dateutil.relativedelta import relativedelta
+from typing import List, Tuple
+
+import numpy as np
+import pandas as pd
 import pytz
+from dateutil.relativedelta import relativedelta
 from tqdm.auto import tqdm
 
-from data.constants import (
-    TIMESTAMP_COL,
-    TICKER_COL,
-    ID_COL,
-    TICK_COLUMNS,
-)
+from data.constants import ID_COL, TICK_COLUMNS, TICKER_COL, TIMESTAMP_COL
 from data.utils import valid_tick_df_pandas
 
 
@@ -36,7 +31,10 @@ def parse_args():
         "-c",
         type=str,
         required=True,
-        help="Cadence with which to split files [daily, weekly, monthly, quarterly, annually]",
+        help=(
+            "Cadence with which to split files [daily, weekly, monthly, quarterly,"
+            " annually]"
+        ),
     )
     parser.add_argument(
         "--recursive",
@@ -145,7 +143,7 @@ def main(args):
         raise OSError("Input dir path not found")
 
     if not args.recursive:
-        input_paths = list(input_dir_path.glob("*.csv"))
+        input_paths = sorted(list(input_dir_path.glob("*.csv")))
         output_dir = Path(args.output_dir) if args.output_dir else input_dir_path
         process_fileset(
             input_paths=input_paths,
@@ -153,10 +151,10 @@ def main(args):
             write_cadence=args.write_cadence,
         )
     else:
-        input_paths = list(input_dir_path.rglob("*.csv"))
+        input_paths = sorted(list(input_dir_path.rglob("*.csv")))
         subdirs = get_subdirectories(input_paths)
         for subdir in tqdm(subdirs):
-            input_paths = list(subdir.glob("*.csv"))
+            input_paths = sorted(list(subdir.glob("*.csv")))
             output_dir = (
                 Path(args.output_dir) / subdir.relative_to(input_dir_path)
                 if args.output_dir

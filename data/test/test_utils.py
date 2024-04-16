@@ -1,8 +1,9 @@
-import pandas as pd
-import numpy as np
 import unittest
 
-from data.utils import missing_elements, interpolate_missing_ids
+import numpy as np
+import pandas as pd
+
+from data.utils import interpolate_missing_ids, missing_elements
 
 
 class TestDataUtils(unittest.TestCase):

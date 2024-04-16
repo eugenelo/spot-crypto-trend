@@ -1,42 +1,29 @@
+from typing import Callable, List, Optional
+
 import pandas as pd
 import plotly.express as px
-import numpy as np
-from typing import List, Callable, Optional
-from numba import njit
 
-from data.constants import (
-    TIMESTAMP_COL,
-    TICKER_COL,
-    VOLUME_COL,
-)
-from core.constants import (
-    PRICE_COL_BACKTEST,
-    POSITION_COL,
-)
+from core.constants import POSITION_COL, PRICE_COL_BACKTEST
+from data.constants import TICKER_COL, TIMESTAMP_COL, VOLUME_COL
 from position_generation.constants import (
     NUM_LONG_ASSETS_COL,
+    NUM_OPEN_LONG_POSITIONS_COL,
+    NUM_OPEN_POSITIONS_COL,
+    NUM_OPEN_SHORT_POSITIONS_COL,
     NUM_SHORT_ASSETS_COL,
     NUM_UNIQUE_ASSETS_COL,
-    NUM_OPEN_LONG_POSITIONS_COL,
-    NUM_OPEN_SHORT_POSITIONS_COL,
-    NUM_OPEN_POSITIONS_COL,
 )
-from simulation.vbt import (
-    vbt,
-    simulate,
-    get_returns,
-)
-from simulation.fees import compute_fees, FeeType
+from simulation.constants import DEFAULT_REBALANCING_BUFFER, DEFAULT_VOLUME_MAX_SIZE
+from simulation.fees import FeeType, compute_fees
 from simulation.stats import (
-    get_stats_of_interest,
-    get_turnover,
-    get_trade_volume,
     display_stats,
+    get_trade_volume,
+    get_turnover,
     plot_cumulative_returns,
     plot_rolling_returns,
 )
-from simulation.constants import DEFAULT_VOLUME_MAX_SIZE, DEFAULT_REBALANCING_BUFFER
 from simulation.utils import get_segment_mask
+from simulation.vbt import get_returns, simulate, vbt
 
 
 def backtest(
@@ -52,12 +39,13 @@ def backtest(
     rebalancing_buffer: float = DEFAULT_REBALANCING_BUFFER,
     verbose: bool = False,
 ) -> vbt.Portfolio:
-    """Backtest a pf_strategy
+    """
+    Backtest a pf_strategy
 
     Args:
         df_backtest (pd.DataFrame): Should contain timestamp, close, position columns. Assuming 0 slippage, entire order can be filled.
         initial_capital (float): Initial capital in USD.
-    """
+    """  # noqa: B950
     # Copy dataframe to avoid corrupting original contents
     df_backtest = df_backtest.copy()
 
@@ -172,8 +160,9 @@ def backtest(
         )
         fig.show()
 
-    # Now, simulate trades with dynamic fees. It's still not entirely accurate because trading volume
-    # will depend on account size (which depends on fees), but close enough for an approximation.
+    # Now, simulate trades with dynamic fees. It's still not entirely accurate
+    # because trading volume will depend on account size (which depends on fees),
+    # but close enough for an approximation.
     portfolio_with_fees = simulate(
         price=price,
         positions=positions,
@@ -271,7 +260,8 @@ def backtest_crypto(
     rebalancing_buffer: float = DEFAULT_REBALANCING_BUFFER,
     skip_plots: bool = False,
 ) -> List[vbt.Portfolio]:
-    """Convenience wrapper for backtesting on crypto dataset
+    """
+    Convenience wrapper for backtesting on crypto dataset
 
     Args:
         df_analysis (pd.DataFrame): _description_
@@ -284,7 +274,7 @@ def backtest_crypto(
 
     Returns:
         List[vbt.Portfolio]: _description_
-    """
+    """  # noqa: B950
     # Backtest benchmark
     df_benchmark = generate_benchmark_fn(df_analysis)
     pf_benchmark = backtest(

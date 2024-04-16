@@ -1,13 +1,10 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import plotly.express as px
 
-from position_generation.v1 import (
-    generate_positions_v1,
-    CRYPTO_MOMO_DEFAULT_PARAMS,
-)
-from data.constants import TIMESTAMP_COL, TICKER_COL
 from core.constants import POSITION_COL
+from data.constants import TICKER_COL, TIMESTAMP_COL
+from position_generation.v1 import CRYPTO_MOMO_DEFAULT_PARAMS, generate_positions_v1
 
 
 def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
@@ -19,11 +16,14 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
     df_analysis["strat_simple_returns_daily"] = (
         df_analysis[POSITION_COL] * df_analysis["next_1d_returns"]
     )
-    # Weekly rebalancing, sell on Thursday 12am UTC, buy on Friday 12am UTC. Put on position to get next day returns.
+    # Weekly rebalancing, sell on Thursday 12am UTC, buy on Friday 12am UTC.
+    # Put on position to get next day returns.
     df_analysis["strat_simple_returns_weekly"] = df_analysis.apply(
-        lambda x: x[POSITION_COL] * x["next_6d_returns"]
-        if x[TIMESTAMP_COL].day_name() == "Thursday"
-        else 0,
+        lambda x: (
+            x[POSITION_COL] * x["next_6d_returns"]
+            if x[TIMESTAMP_COL].day_name() == "Thursday"
+            else 0
+        ),
         axis=1,
     )
     # Benchmark 100% long BTC
@@ -62,7 +62,6 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
     df_cumulative["cum_strat_log_returns_weekly"] = df_cumulative[
         "strat_log_returns_weekly"
     ].cumsum()
-    # df_cumulative["cum_benchmark_log_returns"] = df_cumulative["benchmark_log_returns"].cumsum()
     df_cumulative["cum_benchmark_log_returns"] = np.log(
         df_cumulative["benchmark_simple_returns"] + 1
     ).cumsum()

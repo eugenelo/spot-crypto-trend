@@ -1,32 +1,31 @@
 import argparse
-import pandas as pd
-import plotly.express as px
-from scipy import stats
-import numpy as np
 from datetime import datetime
-import pytz
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytz
 import yaml
-from typing import Callable
 
 from analysis.analysis import analysis
-from simulation.simulation import simulation
-from simulation.utils import rebal_freq_supported
-from simulation.backtest import backtest_crypto
-from simulation.optimize import optimize
+from core.constants import POSITION_COL, in_universe_excl_stablecoins
+from core.utils import get_periods_per_day
+from data.constants import TICKER_COL, TIMESTAMP_COL
+from data.utils import load_ohlc_to_daily_filtered  # noqa: F401
+from data.utils import load_ohlc_to_hourly_filtered  # noqa: F401
+from position_generation.benchmark import get_generate_benchmark_fn
+from position_generation.position_generation import get_generate_positions_fn
+from position_generation.utils import nonempty_positions
+from signal_generation.constants import get_signal_type
 from signal_generation.signal_generation import (
     create_analysis_signals,
     create_trading_signals,
 )
-from signal_generation.constants import get_signal_type
-from simulation.constants import DEFAULT_VOLUME_MAX_SIZE, DEFAULT_REBALANCING_BUFFER
-from position_generation.benchmark import get_generate_benchmark_fn
-from position_generation.utils import nonempty_positions, Direction
-from position_generation.position_generation import get_generate_positions_fn
-from data.constants import TIMESTAMP_COL, TICKER_COL
-from data.utils import load_ohlc_to_hourly_filtered, load_ohlc_to_daily_filtered
-from core.constants import POSITION_COL, in_universe_excl_stablecoins
-from core.utils import get_periods_per_day
+from simulation.backtest import backtest_crypto
+from simulation.constants import DEFAULT_REBALANCING_BUFFER, DEFAULT_VOLUME_MAX_SIZE
+from simulation.optimize import optimize
+from simulation.simulation import simulation
+from simulation.utils import rebal_freq_supported
 
 
 def parse_args():
@@ -134,12 +133,14 @@ if __name__ == "__main__":
             rebalancing_freq = params["rebalancing_freq"]
         elif params["rebalancing_freq"] != rebalancing_freq:
             print(
-                f"Rebalancing freq conflict! Params={params['rebalancing_freq']}, Input={rebalancing_freq}. Using input {rebalancing_freq}."
+                f"Rebalancing freq conflict! Params={params['rebalancing_freq']},"
+                f" Input={rebalancing_freq}. Using input {rebalancing_freq}."
             )
     if rebalancing_freq is not None:
-        assert rebal_freq_supported(
-            rebalancing_freq
-        ), f"Rebalancing frequency {rebalancing_freq} is not supported! Use a fixed frequency instead (e.g. days)."
+        assert rebal_freq_supported(rebalancing_freq), (
+            f"Rebalancing frequency {rebalancing_freq} is not supported! Use a fixed"
+            " frequency instead (e.g. days)."
+        )
     print(f"Rebalancing Freq: {rebalancing_freq}")
     volume_max_size = DEFAULT_VOLUME_MAX_SIZE
     if "volume_max_size" in params:

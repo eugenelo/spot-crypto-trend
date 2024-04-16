@@ -1,6 +1,4 @@
 import unittest
-import pandas as pd
-import numpy as np
 
 from simulation.optimize import generate_parameter_sets
 
@@ -10,7 +8,7 @@ class TestGenerateParameterSets(unittest.TestCase):
         # Missing required param
         optimize_params = {}
         with self.assertRaises(RuntimeError):
-            parameter_sets = generate_parameter_sets(optimize_params)
+            generate_parameter_sets(optimize_params)
 
     def test_invalid_spec(self):
         # Invalid use of dictionary
@@ -20,7 +18,7 @@ class TestGenerateParameterSets(unittest.TestCase):
             "volatility_target": {"invalid_key": "invalid_value"},
         }
         with self.assertRaises(AssertionError):
-            parameter_sets = generate_parameter_sets(optimize_params)
+            generate_parameter_sets(optimize_params)
 
     def test_nominal(self):
         optimize_params = {

@@ -1,30 +1,38 @@
 import argparse
-import ccxt
-from dataclasses import dataclass
-import pandas as pd
-import numpy as np
-from typing import Optional, List, Tuple
-from pathlib import Path
 import time
-from datetime import datetime, timedelta, time as datetime_time
-from dateutil.relativedelta import relativedelta
+from dataclasses import dataclass
+from datetime import datetime
+from datetime import time as datetime_time
+from datetime import timedelta
+from pathlib import Path
+from typing import Optional, Tuple
+
+import ccxt
+import numpy as np
+import pandas as pd
 import pytz
+from dateutil.relativedelta import relativedelta
 from tqdm.auto import tqdm
 
 from data.constants import (
-    TIMESTAMP_COL,
-    TICKER_COL,
-    VOLUME_COL,
-    PRICE_COL,
-    ID_COL,
-    ORDER_SIDE_COL,
-    ORDER_TYPE_COL,
-    NUMERIC_COLUMNS,
-    NUM_RETRY_ATTEMPTS,
     EPS_MS,
     EPS_NS,
+    ID_COL,
+    NUM_RETRY_ATTEMPTS,
+    NUMERIC_COLUMNS,
+    ORDER_SIDE_COL,
+    ORDER_TYPE_COL,
+    PRICE_COL,
+    TICKER_COL,
+    TIMESTAMP_COL,
+    VOLUME_COL,
 )
-from data.utils import missing_elements, valid_tick_df_pandas, interpolate_missing_ids
+from data.utils import (
+    get_unified_symbols,
+    get_usd_symbols,
+    interpolate_missing_ids,
+    valid_tick_df_pandas,
+)
 
 
 def parse_args():
@@ -41,7 +49,10 @@ def parse_args():
         "--from_latest",
         "-f",
         action="store_true",
-        help="Fetch tick data from the latest available timestamp (per ticker). Existing files should be stored under `{--output_dir}/{ticker}/`",
+        help=(
+            "Fetch tick data from the latest available timestamp (per ticker)."
+            "Existing files should be stored under `{--output_dir}/{ticker}/`"
+        ),
     )
     parser.add_argument("--end", "-e", type=float, help="End Unix timestamp in seconds")
     parser.add_argument(
@@ -49,7 +60,9 @@ def parse_args():
         "-c",
         type=int,
         default=312500,
-        help="Maximum number of trades to try fetching at a single time, default = 10MB",
+        help=(
+            "Maximum number of trades to try fetching at a single time, default = 10MB"
+        ),
     )
     return parser.parse_args()
 
@@ -60,7 +73,7 @@ class KrakenTick(ccxt.kraken):
         symbol: str,
         since: Optional[int] = None,
         limit: Optional[int] = None,
-        params={},
+        params: Optional[dict] = None,
     ):
         """
         get the list of most recent trades for a particular symbol
@@ -70,7 +83,7 @@ class KrakenTick(ccxt.kraken):
         :param int [limit]: the maximum amount of trades to fetch
         :param dict [params]: extra parameters specific to the exchange API endpoint
         :returns Trade[]: a list of `trade structures <https://docs.ccxt.com/#/?id=public-trades>`
-        """
+        """  # noqa: B950
         self.load_markets()
         market = self.market(symbol)
         id = market["id"]
@@ -85,7 +98,9 @@ class KrakenTick(ccxt.kraken):
         if limit is not None:
             request["count"] = limit
 
-        response = self.publicGetTrades(self.extend(request, params))
+        if params is not None:
+            request = self.extend(request, params)
+        response = self.publicGetTrades(request)
         #
         #     {
         #         "error": [],
@@ -110,18 +125,6 @@ class KrakenTick(ccxt.kraken):
         return self.parse_trades(trades, market, since=None, limit=limit)
 
 
-def get_usd_symbols(kraken: ccxt.kraken) -> List[str]:
-    # Get all available tickers on Kraken using ccxt to enable using unified symbols
-    tickers = kraken.fetch_tickers()
-    symbols = tickers.keys()
-    symbols = [
-        symbol
-        for symbol in symbols
-        if (symbol.endswith("USD") and not symbol.endswith("PYUSD"))
-    ]
-    return symbols
-
-
 def get_symbol_output_dir(output_dir: Path, symbol: str) -> Path:
     symbol_str_clean = symbol.replace("/", "")
     return Path(output_dir) / Path(symbol_str_clean)
@@ -141,15 +144,7 @@ def set_since_ns_from_latest(output_dir: Path, symbol: str) -> int:
     since_ns = 0
     output_dir = get_symbol_output_dir(output_dir=output_dir, symbol=symbol)
     if output_dir.exists():
-        paths_for_symbol = []
-        for path in output_dir.glob("*.csv"):
-            # TODO(@eugene.lo): Temporary filter, remove later
-            if (
-                path.stem == f"{symbol.replace('/', '')}"
-                or "2024" in path.stem.split("_")[1]
-            ):
-                continue
-            paths_for_symbol.append(path)
+        paths_for_symbol = [path for path in output_dir.glob("*.csv")]
         if len(paths_for_symbol) > 0:
             latest_path = sorted(paths_for_symbol)[-1]
             df_latest_output = pd.read_csv(latest_path)
@@ -169,7 +164,8 @@ def fetch_tick_data(
     end_ns: int,
     chunk_size: int,
 ) -> Tuple[pd.DataFrame, int]:
-    """Fetch tick data for symbol from exchange
+    """
+    Fetch tick data for symbol from exchange
 
     Args:
         kraken (ccxt.kraken): Kraken exchange API
@@ -182,7 +178,7 @@ def fetch_tick_data(
         pd.DataFrame: DataFrame containing tick data
         int: Unix stamp in nanoseconds containing the `last` parameter
              value (see https://support.kraken.com/hc/en-us/articles/218198197-How-to-retrieve-historical-time-and-sales-trading-history-using-the-REST-API-Trades-endpoint-)
-    """
+    """  # noqa: B950
     # Stream tick data
     tick_data = {
         ID_COL: [],
@@ -196,7 +192,7 @@ def fetch_tick_data(
     last_since_ns = None
     while since_ns < end_ns:
         fetched_trades: bool = False
-        for attempt in range(NUM_RETRY_ATTEMPTS):
+        for _attempt in range(NUM_RETRY_ATTEMPTS):
             try:
                 trades = kraken.fetch_trades(symbol, since=since_ns)
                 fetched_trades = True
@@ -212,23 +208,24 @@ def fetch_tick_data(
             else:
                 break
         if not fetched_trades:
-            print("Exceeded num retries and failed...")
             break
         if len(trades) == 0:
             # No trades, done
             break
-        # elif last_trade_id is not None and last_trade_id != 0 and trades[-1][ID_COL] == last_trade_id:
-        #     # No new data, done
-        #     break
+        elif (
+            last_trade_id is not None
+            and last_trade_id != 0
+            and trades[-1][ID_COL] == last_trade_id
+        ):
+            # No new data, done
+            break
 
         for trade in trades:
-            tick_data[ID_COL].append(
-                trade[ID_COL]
-            )  # May equal 0, which is an invalid id
-            timestamp = float(trade["info"][2])
+            tick_data[ID_COL].append(int(trade[ID_COL]))  # May be 0, which is invalid
+            timestamp = float(trade["info"][2])  # [sec]
             tick_data[TIMESTAMP_COL].append(timestamp)
-            tick_data[PRICE_COL].append(trade[PRICE_COL])
-            tick_data[VOLUME_COL].append(trade["amount"])
+            tick_data[PRICE_COL].append(float(trade[PRICE_COL]))
+            tick_data[VOLUME_COL].append(float(trade["amount"]))
             tick_data[ORDER_SIDE_COL].append(trade[ORDER_SIDE_COL])
             tick_data[ORDER_TYPE_COL].append(trade[ORDER_TYPE_COL])
 
@@ -272,19 +269,9 @@ def main(args):
     # Initialize the Kraken exchange
     kraken = KrakenTick()
 
-    # Get all available tickers on Kraken using ccxt to enable using unified symbols
+    # Get ccxt symbols
     if args.ticker is not None:
-        # Convert to unified symbol
-        kraken.load_markets()
-        try:
-            market = kraken.markets_by_id[args.ticker][0]
-            ccxt_symbol = market["symbol"]
-        except Exception:
-            print(f"Failed to find {args.ticker} on ccxt! Converting manually.")
-            kraken_symbol = args.ticker.replace("/", "")
-            ccxt_symbol = kraken_symbol[:-3] + "/" + kraken_symbol[-3:]
-        print(f"{args.ticker} -> {ccxt_symbol}")
-        symbols = [ccxt_symbol]
+        symbols = get_unified_symbols(kraken, tickers=[args.ticker])
     else:
         symbols = get_usd_symbols(kraken)
     print(f"{len(symbols)} valid USD pairs")
@@ -294,9 +281,10 @@ def main(args):
         + int(args.since is not None)
         + int(args.from_latest)
     )
-    assert (
-        num_input_methods == 1
-    ), "Must specify starting stamp via exactly one of ['--lookback_days', '--since', '--from_latest']"
+    assert num_input_methods == 1, (
+        "Must specify starting stamp via exactly one of ['--lookback_days', '--since',"
+        " '--from_latest']"
+    )
 
     # Get starting query stamp
     if args.lookback_days is not None:
@@ -312,7 +300,8 @@ def main(args):
     if args.end is not None:
         end = args.end
     else:
-        # Don't add any buffer, otherwise symbols queried later will contain more data than symbols queried earlier
+        # Don't add any buffer, otherwise symbols queried later will
+        # contain more data than symbols queried earlier
         end = float(kraken.parse8601(datetime.now().isoformat()) / 1000)
     # Convert start/end timestamps to ns.
     since_ns = int(since * 1e9)
@@ -327,7 +316,8 @@ def main(args):
             )
             since = float(since_ns) * 1e-9
         print(
-            f"Fetching data for {symbol} from {datetime.fromtimestamp(since)} to {datetime.fromtimestamp(end)}"
+            f"Fetching data for {symbol} from {datetime.fromtimestamp(since)} to"
+            f" {datetime.fromtimestamp(end)}"
         )
 
         query_ns = since_ns
@@ -353,7 +343,9 @@ def main(args):
                 # Check for skipped trades
                 if last_trade_id < df_tick[ID_COL].min() - 1:
                     print(
-                        f"Skipped trades for {symbol}! since_ns={query_ns}, last_trade_id={last_trade_id}, new_min_trade_id={df_tick[ID_COL].min()}"
+                        f"Skipped trades for {symbol}! since_ns={query_ns},"
+                        f" last_trade_id={last_trade_id},"
+                        f" new_min_trade_id={df_tick[ID_COL].min()}"
                     )
                     failed_jobs.append(
                         FailedJob(
@@ -366,6 +358,14 @@ def main(args):
                     break
             # Drop duplicate rows. Use full column set since id can still be 0
             df_tick.drop_duplicates(inplace=True)
+            t1 = time.time()
+
+            min_date = datetime.fromtimestamp(df_tick[TIMESTAMP_COL].min(), tz=pytz.UTC)
+            max_date = datetime.fromtimestamp(df_tick[TIMESTAMP_COL].max(), tz=pytz.UTC)
+            print(
+                f"Fetched {len(df_tick)} trades from {min_date} to {max_date} in"
+                f" {t1-t0:.2f} seconds"
+            )
 
             # Try to correct trade_ids of value 0
             if (df_tick[ID_COL] == 0).any():
@@ -378,8 +378,10 @@ def main(args):
                     pass
                 if df_tick[ID_COL].isna().any():
                     print(
-                        "Failed to correct trade_ids of 0. Try fetching the data again with a larger '--chunk_size'\n"
-                        f"\t- symbol={symbol}, since_ns={query_ns}, end_ns={end_ns}, chunk_size={args.chunk_size}"
+                        "Failed to correct trade_ids of 0. Try fetching the data again"
+                        f" with a larger '--chunk_size'\n\t- symbol={symbol},"
+                        f" since_ns={query_ns}, end_ns={end_ns},"
+                        f" chunk_size={args.chunk_size}"
                     )
                     failed_jobs.append(
                         FailedJob(
@@ -391,13 +393,6 @@ def main(args):
                     )
                     break
 
-            min_date = datetime.fromtimestamp(df_tick[TIMESTAMP_COL].min(), tz=pytz.UTC)
-            max_date = datetime.fromtimestamp(df_tick[TIMESTAMP_COL].max(), tz=pytz.UTC)
-
-            t1 = time.time()
-            print(
-                f"Fetched {len(df_tick)} trades from {min_date} to {max_date} in {t1-t0:.2f} seconds"
-            )
             if not valid_tick_df_pandas(df=df_tick, combined=False):
                 failed_jobs.append(
                     FailedJob(
@@ -416,12 +411,15 @@ def main(args):
                 )
                 dt = relativedelta(months=1)
                 write_end = write_start + dt
-                while True:
+
+                while write_start.timestamp() <= df_tick[TIMESTAMP_COL].max():
                     start_mask = df_tick[TIMESTAMP_COL] >= write_start.timestamp()
                     end_mask = df_tick[TIMESTAMP_COL] < write_end.timestamp()
                     df_write = df_tick.loc[(start_mask) & (end_mask)]
                     if df_write.empty:
-                        break
+                        write_start += dt
+                        write_end += dt
+                        continue
 
                     output_path = get_output_path(
                         output_dir=args.output_dir,

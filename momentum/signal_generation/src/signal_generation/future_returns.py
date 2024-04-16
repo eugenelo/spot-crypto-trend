@@ -1,12 +1,7 @@
 import pandas as pd
-import numpy as np
 
-from signal_generation.common import (
-    sort_dataframe,
-    future_returns,
-    future_log_returns,
-)
 from core.constants import PRICE_COL_SIGNAL_GEN
+from signal_generation.common import future_log_returns, future_returns, sort_dataframe
 
 
 def create_future_return_signals(

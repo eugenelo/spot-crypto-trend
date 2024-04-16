@@ -1,0 +1,6 @@
+[tool.isort]
+py_version = 311
+profile = "black"
+extend_skip = [".venv"]
+extend_skip_glob = ["bazel*"]
+known_first_party = ["data", "analysis", "core", "live", "position_generation", "signal_generation", "simulation"]

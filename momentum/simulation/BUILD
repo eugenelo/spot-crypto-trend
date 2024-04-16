@@ -49,6 +49,7 @@ py_test(
     name="test_simulate",
     srcs = ["test/test_simulate.py"],
     deps = [
+        ":simulation",
         ":vbt",
     ],
     size="medium",

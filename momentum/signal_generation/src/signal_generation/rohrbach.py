@@ -1,13 +1,8 @@
-import pandas as pd
-import plotly.express as px
 import numpy as np
+import pandas as pd
 
-from signal_generation.common import (
-    sort_dataframe,
-    volatility_ema,
-    bins,
-)
 from core.constants import PRICE_COL_SIGNAL_GEN
+from signal_generation.common import bins, sort_dataframe, volatility_ema
 
 
 def create_rohrbach_signals(
@@ -17,7 +12,8 @@ def create_rohrbach_signals(
 
     Args:
         df_ohlc (pd.DataFrame): OHLC dataframe
-        periods_per_day (int): Frequency of OHLC data in periods per day (e.g. hourly data == 24, daily data == 1).
+        periods_per_day (int): Frequency of OHLC data in periods per day
+                               (e.g. hourly data == 24, daily data == 1).
 
     Returns:
         pd.DataFrame: Dataframe with trading signals.
@@ -28,8 +24,8 @@ def create_rohrbach_signals(
     # Calculate x_k
     ema_window_pairs = [(4, 12), (8, 24), (16, 48), (32, 96), (64, 192)]
     for k, pair in enumerate(ema_window_pairs):
-        s, l = pair[0], pair[1]
-        df_signals[f"x_{k}"] = df_signals[f"{s}d_ema"] - df_signals[f"{l}d_ema"]
+        short, long = pair[0], pair[1]
+        df_signals[f"x_{k}"] = df_signals[f"{short}d_ema"] - df_signals[f"{long}d_ema"]
 
     # Calculate realized 3-month normal volatility on prices
     lookback_days = 91

@@ -11,6 +11,7 @@ py_library(
         requirement("pandas"),
         requirement("pytz"),
         requirement("polars"),
+        requirement("ccxt"),
     ],
     visibility = ["//visibility:public"]
 )

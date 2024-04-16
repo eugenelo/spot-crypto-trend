@@ -2,11 +2,10 @@ import pandas as pd
 
 from signal_generation.common import sort_dataframe
 from signal_generation.constants import SignalType
-from signal_generation.historical_returns import create_historical_return_signals
 from signal_generation.future_returns import create_future_return_signals
+from signal_generation.historical_returns import create_historical_return_signals
 from signal_generation.rohrbach import create_rohrbach_signals
 from signal_generation.volume import create_volume_signals
-from core.utils import apply_hysteresis
 
 
 def create_trading_signals(

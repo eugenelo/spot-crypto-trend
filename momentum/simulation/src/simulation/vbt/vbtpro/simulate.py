@@ -1,16 +1,11 @@
-import pandas as pd
-import numpy as np
-from numba import njit
 from typing import Optional
 
+import numpy as np
+import pandas as pd
 import vectorbtpro as vbt
+from numba import njit
 from vectorbtpro.base.flex_indexing import flex_select_nb
-from vectorbtpro.portfolio.enums import (
-    SizeType,
-    Direction,
-    NoOrder,
-    LeverageMode,
-)
+from vectorbtpro.portfolio.enums import Direction, LeverageMode, NoOrder, SizeType
 
 from core.utils_nb import clip_nb
 
@@ -52,7 +47,9 @@ def order_func_nb(
     volume_max_size: float,
     rebalancing_buffer: float,
 ):
-    """Execute long-only orders while respecting sizing constraints (% of available volume) and rebalancing buffers.
+    """
+    Execute long-only orders while respecting sizing constraints (% of available
+    volume) and rebalancing buffers.
 
     Args:
         c (vbt.portfolio.enums.OrderContext): OrderContext
@@ -151,7 +148,7 @@ def simulate(
     pf = vbt.Portfolio.from_order_func(
         price,
         order_func_nb=order_func_nb,
-        order_args = (
+        order_args=(
             size_np,
             volume_np,
             vbt.Rep('size_type'),

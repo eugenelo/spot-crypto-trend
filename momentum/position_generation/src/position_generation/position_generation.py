@@ -1,46 +1,43 @@
-import pandas as pd
+from functools import partial
+from typing import Callable, Optional
+
 import numpy as np
-from typing import Optional, Callable
+import pandas as pd
 import static_frame as sf
 
+from core.constants import PAST_7D_RETURNS_COL, POSITION_COL, VOLUME_FILTER_COL
+from data.constants import TICKER_COL, TIMESTAMP_COL
+from position_generation.constants import (
+    ABS_SIGNAL_AVG_COL,
+    DM_30D_EMA_COL,
+    DM_COL,
+    FDM_30D_EMA_COL,
+    FDM_COL,
+    IDM_30D_EMA_COL,
+    IDM_COL,
+    MAX_ABS_POSITION_SIZE_COL,
+    NUM_KEPT_ASSETS_COL,
+    NUM_LONG_ASSETS_COL,
+    NUM_OPEN_LONG_POSITIONS_COL,
+    NUM_OPEN_POSITIONS_COL,
+    NUM_OPEN_SHORT_POSITIONS_COL,
+    NUM_SHORT_ASSETS_COL,
+    NUM_UNIQUE_ASSETS_COL,
+    POSITION_SCALING_FACTOR_COL,
+    RANK_COL,
+    SCALED_SIGNAL_COL,
+    VOL_FORECAST_COL,
+    VOL_LONG_COL,
+    VOL_SHORT_COL,
+    VOL_TARGET_COL,
+)
 from position_generation.diversification_multipliers import (
-    compute_idm,
     compute_fdm,
+    compute_idm,
     vol_target_scaling_dm,
 )
 from position_generation.utils import Direction
-from position_generation.constants import (
-    VOL_SHORT_COL,
-    VOL_LONG_COL,
-    VOL_FORECAST_COL,
-    VOL_TARGET_COL,
-    ABS_SIGNAL_AVG_COL,
-    RANK_COL,
-    IDM_COL,
-    IDM_30D_EMA_COL,
-    FDM_COL,
-    FDM_30D_EMA_COL,
-    DM_COL,
-    DM_30D_EMA_COL,
-    POSITION_SCALING_FACTOR_COL,
-    SCALED_SIGNAL_COL,
-    NUM_UNIQUE_ASSETS_COL,
-    NUM_LONG_ASSETS_COL,
-    NUM_SHORT_ASSETS_COL,
-    NUM_KEPT_ASSETS_COL,
-    NUM_OPEN_LONG_POSITIONS_COL,
-    NUM_OPEN_SHORT_POSITIONS_COL,
-    NUM_OPEN_POSITIONS_COL,
-    MAX_ABS_POSITION_SIZE_COL,
-    IDM_REFRESH_PERIOD,
-)
-from data.constants import TIMESTAMP_COL, TICKER_COL
-from core.constants import (
-    POSITION_COL,
-    PAST_7D_RETURNS_COL,
-    VOLUME_FILTER_COL,
-)
-from signal_generation.common import sort_dataframe, cross_sectional_abs_ema
+from signal_generation.common import cross_sectional_abs_ema, sort_dataframe
 from signal_generation.volume import create_volume_filter_mask
 
 
@@ -56,8 +53,9 @@ def get_generate_positions_fn(
         min_daily_volume = params.get("min_daily_volume", None)
         max_daily_volume = params.get("max_daily_volume", None)
         leverage = params.get("leverage", 1.0)
-        generate_positions_fn = lambda df: generate_positions(
-            df,
+
+        generate_positions_fn = partial(
+            generate_positions,
             signal=signal,
             periods_per_day=periods_per_day,
             direction=direction,
@@ -98,8 +96,8 @@ def generate_positions(
     # Construct trade signal
     df[SCALED_SIGNAL_COL] = df[signal]
 
-    # Scale each signal s.t. the absolute average is equal to 1 (to achieve risk target on average)
-    # This comes before any filters are applied.
+    # Scale each signal s.t. the absolute average is equal to 1 to achieve risk
+    # target on average. This comes before any filters are applied.
     df = scale_signal_avg_to_1(
         df, signal=SCALED_SIGNAL_COL, periods_per_day=periods_per_day
     )
@@ -117,12 +115,12 @@ def generate_positions(
     rank_col = RANK_COL.format(signal=SCALED_SIGNAL_COL)
     df[rank_col] = generate_signal_rank(df, signal=SCALED_SIGNAL_COL)
 
-    # Get number of investable assets in universe per timestamp. Assets which are filtered out
-    # from consideration are denoted by np.nan values.
+    # Get number of investable assets in universe per timestamp. Assets which
+    # are filtered out from consideration are denoted by np.nan values.
     df[NUM_UNIQUE_ASSETS_COL] = get_num_unique_assets(df)
 
-    # Compute diversification multipliers. This comes after all filters have been applied.
-    # Use static frames to hash results for identical inputs.
+    # Compute diversification multipliers. This comes after all filters have
+    # been applied. Use static frames to hash results for identical inputs.
     idm_cols = [TIMESTAMP_COL, TICKER_COL, SCALED_SIGNAL_COL]
     idm_df = sf.FrameHE.from_pandas(df[idm_cols])
     returns_matrix = sf.FrameHE.from_pandas(
@@ -170,9 +168,10 @@ def generate_positions(
     # Apply cross-sectional weighting, if applicable
     if cross_sectional_percentage is not None:
         if direction == Direction.Both:
-            assert (
-                cross_sectional_percentage <= 0.5
-            ), "cross_sectional_percentage can't be greater than 0.5 when direction is Both!"
+            assert cross_sectional_percentage <= 0.5, (
+                "cross_sectional_percentage can't be greater than 0.5 when direction is"
+                " Both!"
+            )
         df = apply_cross_sectional_filter(
             df,
             signal=SCALED_SIGNAL_COL,
@@ -181,7 +180,8 @@ def generate_positions(
             cross_sectional_equal_weight=cross_sectional_equal_weight or False,
         )
     else:
-        # No cross-sectional filter, could theoretically get long/short the entire universe
+        # No cross-sectional filter, could theoretically get long/short
+        # the entire universe
         df[NUM_LONG_ASSETS_COL] = df[NUM_UNIQUE_ASSETS_COL]
         df[NUM_SHORT_ASSETS_COL] = df[NUM_UNIQUE_ASSETS_COL]
     df[NUM_KEPT_ASSETS_COL] = df[NUM_LONG_ASSETS_COL] + df[NUM_SHORT_ASSETS_COL]
@@ -233,6 +233,7 @@ def generate_volatility_forecast(df: pd.DataFrame) -> pd.Series:
         (df_tmp[VOL_LONG_COL].isna()) & (~df_tmp[VOL_SHORT_COL].isna()),
         VOL_FORECAST_COL,
     ] = df_tmp[VOL_SHORT_COL]
+    # Disqualify ticker if short-term estimate is not available
     df_tmp.loc[
         (df_tmp[VOL_LONG_COL].isna()) & (df_tmp[VOL_SHORT_COL].isna()), VOL_FORECAST_COL
     ] = np.nan

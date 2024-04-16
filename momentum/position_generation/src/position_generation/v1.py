@@ -1,11 +1,8 @@
-import pandas as pd
 import numpy as np
-from datetime import datetime
-from typing import Optional, List
+import pandas as pd
 
-from data.constants import TIMESTAMP_COL, TICKER_COL
 from core.constants import POSITION_COL
-
+from data.constants import TICKER_COL, TIMESTAMP_COL
 
 CRYPTO_MOMO_DEFAULT_PARAMS = {
     "momentum_factor": "30d_log_returns",
@@ -58,25 +55,29 @@ def generate_positions_v1(df: pd.DataFrame, params: dict):
     #     & (df["volume_consistent"])
     # )
     df["position_simple"] = df.apply(
-        lambda x: np.clip(
-            (x[momentum_factor] - min_signal_threshold)
-            / (max_signal_threshold - min_signal_threshold),
-            0,
-            1,
-        )
-        if x["signal_simple"]
-        else 0,
+        lambda x: (
+            np.clip(
+                (x[momentum_factor] - min_signal_threshold)
+                / (max_signal_threshold - min_signal_threshold),
+                0,
+                1,
+            )
+            if x["signal_simple"]
+            else 0
+        ),
         axis=1,
     )
     df["position_decile"] = df.apply(
-        lambda x: np.clip(
-            (x[momentum_factor] - min_signal_threshold)
-            / (max_signal_threshold - min_signal_threshold),
-            0,
-            1,
-        )
-        if x["signal_decile"]
-        else 0,
+        lambda x: (
+            np.clip(
+                (x[momentum_factor] - min_signal_threshold)
+                / (max_signal_threshold - min_signal_threshold),
+                0,
+                1,
+            )
+            if x["signal_decile"]
+            else 0
+        ),
         axis=1,
     )
     # df["position_crossover"] = df.apply(

@@ -1,17 +1,11 @@
-import pandas as pd
-import numpy as np
 import unittest
-from datetime import timedelta
 
-from signal_generation.volume import create_volume_filter_mask
+import pandas as pd
+
+from core.constants import AVG_DOLLAR_VOLUME_COL, VOLUME_FILTER_COL
+from data.constants import TICKER_COL, TIMESTAMP_COL
 from signal_generation.common import sort_dataframe
-from data.constants import TIMESTAMP_COL, TICKER_COL
-from core.constants import (
-    AVG_DOLLAR_VOLUME_COL,
-    VOLUME_ABOVE_MIN_COL,
-    VOLUME_BELOW_MAX_COL,
-    VOLUME_FILTER_COL,
-)
+from signal_generation.volume import create_volume_filter_mask
 
 
 class TestVolume(unittest.TestCase):

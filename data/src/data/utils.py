@@ -1,21 +1,23 @@
+import re
+from typing import Callable, List, Optional
+
+import ccxt
 import pandas as pd
 import polars as pl
 import pytz
-import re
-from typing import Callable, Optional, List
 
 from data.constants import (
-    TIMESTAMP_COL,
-    OPEN_COL,
-    HIGH_COL,
-    LOW_COL,
     CLOSE_COL,
-    VWAP_COL,
-    VOLUME_COL,
     DOLLAR_VOLUME_COL,
-    TICKER_COL,
-    OHLC_COLUMNS,
+    HIGH_COL,
     ID_COL,
+    LOW_COL,
+    OHLC_COLUMNS,
+    OPEN_COL,
+    TICKER_COL,
+    TIMESTAMP_COL,
+    VOLUME_COL,
+    VWAP_COL,
 )
 
 
@@ -74,7 +76,8 @@ def valid_ohlc_dataframe(df: pd.DataFrame, freq: str) -> bool:
             print(f"Missing Dates: {ticker} - {missing_dates}")
             return False
 
-    return True
+    # Ensure no NaNs
+    return not df.isnull().values.any()
 
 
 def filter_universe(df: pd.DataFrame, whitelist_fn: Callable) -> pd.DataFrame:
@@ -109,16 +112,18 @@ def _load_ohlc_to_dataframe_filtered(
 
     if input_freq == output_freq:
         # No resampling required
-        pass
+        df = df.reset_index()
     elif re.match(hourly_freq_pattern, input_freq) and output_freq == "1d":
         # Resample hourly to daily
         df = _resample_ohlc_hour_to_day(df)
+        # Fill in days with no transactions
+        df = df.reset_index()
+        df = fill_missing_ohlc(df)
     else:
         raise ValueError(
-            f"Unsupported data frequency pair! input_freq={input_freq}, output_freq={output_freq}"
+            f"Unsupported data frequency pair! input_freq={input_freq},"
+            f" output_freq={output_freq}"
         )
-
-    df = df.reset_index()
     df = df.sort_values(by=[TICKER_COL, TIMESTAMP_COL], ascending=True)
 
     # Filter blacklisted symbol pairs
@@ -154,9 +159,31 @@ def _resample_ohlc_hour_to_day(df_hourly: pd.DataFrame) -> pd.DataFrame:
     return df_daily
 
 
+def fill_missing_ohlc(df: pd.DataFrame) -> pd.DataFrame:
+    # Ensure data is sorted chronologically
+    df = df.sort_values(by=[TICKER_COL, TIMESTAMP_COL], ascending=True)
+
+    # Fill in close first to avoid having to shift
+    df[CLOSE_COL] = df.groupby(TICKER_COL)[CLOSE_COL].ffill()
+    df[OPEN_COL] = df[OPEN_COL].fillna(df[CLOSE_COL])
+    df[HIGH_COL] = df[HIGH_COL].fillna(df[CLOSE_COL])
+    df[LOW_COL] = df[LOW_COL].fillna(df[CLOSE_COL])
+    df[VOLUME_COL] = df[VOLUME_COL].fillna(0)
+    df[DOLLAR_VOLUME_COL] = df[DOLLAR_VOLUME_COL].fillna(0)
+    df[VWAP_COL] = df[VWAP_COL].fillna(df[CLOSE_COL])
+
+    return df
+
+
 def missing_elements(lst: List[int]) -> List[int]:
     start, end = lst[0], lst[-1]
     return sorted(set(range(start, end + 1)).difference(lst))
+
+
+MIN_ID = {
+    "HFT/USD": 3,
+    "DEFAULT": 1,
+}
 
 
 def valid_tick_df_pandas(df: pd.DataFrame, combined: bool) -> bool:
@@ -174,10 +201,23 @@ def valid_tick_df_pandas(df: pd.DataFrame, combined: bool) -> bool:
 
     # Number of elements
     if combined:
+        ticker = df[TICKER_COL].min()
+        min_id = df[ID_COL].min()
+        expected_min_id = MIN_ID.get(ticker, MIN_ID["DEFAULT"])
+        if min_id != expected_min_id:
+            print(
+                f"Incorrect min_id, min_id ({min_id}) != expected ({expected_min_id})"
+            )
+            return False
+
         num_rows = df.shape[0]
         max_id = df[ID_COL].max()
-        if num_rows != max_id:
-            print(f"Num Rows Mismatch: num_rows ({num_rows}) != max_id ({max_id})")
+        expected_num_rows = int(max_id - min_id + 1)
+        if num_rows != expected_num_rows:
+            print(
+                f"Num Rows Mismatch: num_rows ({num_rows}) != expected"
+                f" ({expected_num_rows})"
+            )
             return False
 
     return True
@@ -198,10 +238,23 @@ def valid_tick_df_polars(df: pl.DataFrame, combined: bool) -> bool:
 
     # Number of elements
     if combined:
+        ticker = df.select(pl.min(TICKER_COL)).item()
+        min_id = df.select(pl.min(ID_COL)).item()
+        expected_min_id = MIN_ID.get(ticker, MIN_ID["DEFAULT"])
+        if min_id != expected_min_id:
+            print(
+                f"Incorrect min_id, min_id ({min_id}) != expected ({expected_min_id})"
+            )
+            return False
+
         num_rows = df.select(pl.count()).item()
         max_id = df.select(pl.max(ID_COL)).item()
-        if num_rows != max_id:
-            print(f"Num Rows Mismatch: num_rows ({num_rows}) != max_id ({max_id})")
+        expected_num_rows = int(max_id - min_id + 1)
+        if num_rows != expected_num_rows:
+            print(
+                f"Num Rows Mismatch: num_rows ({num_rows}) != expected"
+                f" ({expected_num_rows})"
+            )
             return False
 
     return True
@@ -234,3 +287,33 @@ def interpolate_missing_ids(ids: pd.Series) -> pd.Series:
         # Interpolation failed
         raise RuntimeError("ID interpolation failed")
     return ids
+
+
+def get_unified_symbols(exchange: ccxt.Exchange, tickers: List[str]) -> List[str]:
+    # Convert ticker to unified symbol
+    exchange.load_markets()
+    symbols = []
+    for ticker in tickers:
+        try:
+            market = exchange.markets_by_id[ticker][0]
+            ccxt_symbol = market["symbol"]
+        except Exception:
+            # TODO(@eugene.lo): This only works for $X/USD pairs
+            print(f"Failed to find {ticker} on ccxt! Converting manually.")
+            ticker = ticker.replace("/", "")
+            ccxt_symbol = ticker[:-3] + "/" + ticker[-3:]
+        print(f"{ticker} -> {ccxt_symbol}")
+        symbols.append(ccxt_symbol)
+    return symbols
+
+
+def get_usd_symbols(exchange: ccxt.Exchange) -> List[str]:
+    # Get all available tickers on exchange using ccxt to enable using unified symbols
+    tickers = exchange.fetch_tickers()
+    symbols = tickers.keys()
+    symbols = [
+        symbol
+        for symbol in symbols
+        if (symbol.endswith("USD") and not symbol.endswith("PYUSD"))
+    ]
+    return symbols

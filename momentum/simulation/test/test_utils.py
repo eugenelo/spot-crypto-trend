@@ -1,6 +1,6 @@
 import unittest
 
-from simulation.utils import rebal_freq_supported, get_segment_mask
+from simulation.utils import get_segment_mask, rebal_freq_supported
 
 
 class TestSimulationUtils(unittest.TestCase):

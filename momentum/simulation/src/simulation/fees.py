@@ -1,6 +1,6 @@
-import pandas as pd
-
 from enum import Enum
+
+import pandas as pd
 
 
 def kraken_maker_fees(rolling_30d_volume: float):

@@ -1,16 +1,12 @@
-import pandas as pd
-import numpy as np
-from numba import njit
-from typing import Optional
+from typing import Any, Optional
 
+import numpy as np
+import pandas as pd
 import vectorbt as vbt
+from numba import njit
 from vectorbt.base.reshape_fns import flex_select_auto_nb
-from vectorbt.portfolio.enums import (
-    SizeType,
-    Direction,
-    NoOrder,
-)
 from vectorbt.portfolio import nb
+from vectorbt.portfolio.enums import Direction, NoOrder, SizeType
 
 from core.utils_nb import clip_nb
 
@@ -50,7 +46,9 @@ def order_func_nb(
     volume_max_size: float,
     rebalancing_buffer: float,
 ):
-    """Execute long-only orders while respecting sizing constraints (% of available volume) and rebalancing buffers.
+    """
+    Execute long-only orders while respecting sizing constraints (% of available
+    volume) and rebalancing buffers.
 
     Args:
         c (vbt.portfolio.enums.OrderContext): OrderContext
@@ -141,7 +139,7 @@ def simulate(
     fixed_fees: float = 0.0,
     slippage: float = 0.0,
     leverage: float = 1.0,
-    leverage_mode: Optional[LeverageMode] = None,
+    leverage_mode: Optional[Any] = None,
 ) -> vbt.Portfolio:
     if leverage is not None:
         print("Leverage is not supported by vectorbt, ignoring!")

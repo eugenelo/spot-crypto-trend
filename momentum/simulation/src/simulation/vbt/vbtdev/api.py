@@ -1,6 +1,5 @@
 import vectorbt as vbt
 
-
 ENTRY_TIMESTAMP_COL = "Entry Timestamp"
 EXIT_TIMESTAMP_COL = "Exit Timestamp"
 

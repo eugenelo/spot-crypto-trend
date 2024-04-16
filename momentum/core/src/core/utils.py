@@ -1,9 +1,6 @@
-import numpy as np
-import pandas as pd
-import pytz
 from datetime import timedelta
-import re
-from typing import Callable
+
+import pandas as pd
 
 
 def apply_hysteresis(
@@ -25,11 +22,13 @@ def apply_hysteresis(
         # Initialize hysteresis column, use pd.NA to set dtype = object
         df[output_col] = pd.NA
 
-        # Apply hysteresis logic: set to True at entry points and propagate until an exit point within each group
+        # Apply hysteresis logic: set to True at entry points and propagate
+        # until an exit point within each group
         df.loc[df["entry_point"], output_col] = True
         df.loc[df["exit_point"], output_col] = False
 
-        # Forward fill within groups to propagate state, then backward fill initial NaNs if any
+        # Forward fill within groups to propagate state, then backward fill
+        # initial NaNs if any
         df[output_col] = (
             df.groupby(group_col)[output_col].ffill().fillna(False).astype(bool)
         )

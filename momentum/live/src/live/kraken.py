@@ -1,11 +1,9 @@
 import argparse
-import ccxt
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-import requests
-from typing import Optional
 from pathlib import Path
+
+import ccxt
+import numpy as np
+import pandas as pd
 import pytz
 import yaml
 
@@ -15,37 +13,26 @@ from core.constants import (
     in_universe_excl_stablecoins,
 )
 from core.utils import get_periods_per_day
-from data.utils import (
-    load_ohlc_to_daily_filtered,
-    load_ohlc_to_hourly_filtered,
-    filter_universe,
-)
-from data.constants import (
-    TIMESTAMP_COL,
-    TICKER_COL,
-    VWAP_COL,
-    VOLUME_COL,
-    DOLLAR_VOLUME_COL,
-    OHLC_COLUMNS,
-)
+from data.constants import TICKER_COL, TIMESTAMP_COL
+from data.utils import load_ohlc_to_daily_filtered, load_ohlc_to_hourly_filtered
 from live.constants import (
+    CURRENT_DOLLAR_POSITION_COL,
     CURRENT_POSITION_COL,
     POSITION_DELTA_COL,
     TARGET_DOLLAR_POSITION_COL,
-    CURRENT_DOLLAR_POSITION_COL,
     TRADE_COL,
     TRADE_COLUMNS,
 )
-from signal_generation.signal_generation import create_trading_signals
-from signal_generation.constants import get_signal_type
 from position_generation.constants import (
+    NUM_OPEN_POSITIONS_COL,
+    SCALED_SIGNAL_COL,
     VOL_FORECAST_COL,
     VOL_TARGET_COL,
-    SCALED_SIGNAL_COL,
-    NUM_OPEN_POSITIONS_COL,
 )
 from position_generation.position_generation import get_generate_positions_fn
-from position_generation.utils import nonempty_positions, validate_positions, Direction
+from position_generation.utils import nonempty_positions
+from signal_generation.constants import get_signal_type
+from signal_generation.signal_generation import create_trading_signals
 
 
 def parse_args():
@@ -104,7 +91,8 @@ def convert_balances_to_cash(kraken):
             continue
 
         print(
-            f"Asset: {asset}, Amount: {amount:.4f}, Market Price: {market_price:.4f}, Cash Value: ${cash_value:.2f}"
+            f"Asset: {asset}, Amount: {amount:.4f}, Market Price: {market_price:.4f},"
+            f" Cash Value: ${cash_value:.2f}"
         )
         balance[asset] = cash_value
 
@@ -114,7 +102,7 @@ def convert_balances_to_cash(kraken):
     return balance
 
 
-def get_pnl(kraken: ccxt.kraken, starting_bankroll: float):
+def print_pnl(kraken: ccxt.kraken, starting_bankroll: float) -> None:
     assert np.isfinite(starting_bankroll) and starting_bankroll > 0.0
     balance = convert_balances_to_cash(kraken)
     curr_cash_value = sum(balance.values())
@@ -122,7 +110,6 @@ def get_pnl(kraken: ccxt.kraken, starting_bankroll: float):
     print(f"Current Cash Value: ${(curr_cash_value):.2f}")
     print(f"Starting Bankroll: ${starting_bankroll:.2f}")
     print(f"PNL: {(pnl * 100):.2f}%")
-    return pnl
 
 
 def get_trades(
@@ -179,12 +166,12 @@ def main(args):
     kraken = ccxt.kraken(
         {
             "apiKey": "EvqEd6Mn/yPHovibTJXKl0UAnoQPvs7yxRIPO/AOj4ifbavMH66M1HYF",
-            "secret": "8w9/RnVsau3IKNH0/cYliHr+pqroxAAR0qecaKscYBVyFRaOerUerVOLiGpCLO/aduyTpdaSRU4xgl+4ERQl5w==",
+            "secret": "8w9/RnVsau3IKNH0/cYliHr+pqroxAAR0qecaKscYBVyFRaOerUerVOLiGpCLO/aduyTpdaSRU4xgl+4ERQl5w==",  # noqa: B950
         }
     )
 
     if args.mode == "pnl":
-        pnl = get_pnl(kraken, starting_bankroll=args.account_size)
+        print_pnl(kraken, starting_bankroll=args.account_size)
         return 0
 
     if args.input_path is None or args.input_data_freq is None:
