@@ -6,7 +6,7 @@ import pandas as pd
 import static_frame as sf
 
 from core.constants import PAST_7D_RETURNS_COL, POSITION_COL, VOLUME_FILTER_COL
-from data.constants import TICKER_COL, TIMESTAMP_COL
+from data.constants import DATETIME_COL, TICKER_COL
 from position_generation.constants import (
     ABS_SIGNAL_AVG_COL,
     DM_30D_EMA_COL,
@@ -88,7 +88,7 @@ def generate_positions(
     lag_positions: bool,
 ) -> pd.DataFrame:
     # Ensure that no duplicate rows exist for (ticker, timestamp) combination
-    assert not df.duplicated(subset=[TICKER_COL, TIMESTAMP_COL], keep=False).any()
+    assert not df.duplicated(subset=[TICKER_COL, DATETIME_COL], keep=False).any()
     df = sort_dataframe(df.copy())
 
     df[VOL_FORECAST_COL] = generate_volatility_forecast(df)
@@ -121,19 +121,19 @@ def generate_positions(
 
     # Compute diversification multipliers. This comes after all filters have
     # been applied. Use static frames to hash results for identical inputs.
-    idm_cols = [TIMESTAMP_COL, TICKER_COL, SCALED_SIGNAL_COL]
+    idm_cols = [DATETIME_COL, TICKER_COL, SCALED_SIGNAL_COL]
     idm_df = sf.FrameHE.from_pandas(df[idm_cols])
     returns_matrix = sf.FrameHE.from_pandas(
         pd.pivot_table(
             df,
-            index=TIMESTAMP_COL,
+            index=DATETIME_COL,
             columns=TICKER_COL,
             values=PAST_7D_RETURNS_COL,
             dropna=False,
         ).reset_index()
     )
     full_date_range = sf.SeriesHE(
-        df.sort_values(TIMESTAMP_COL, ascending=True)[TIMESTAMP_COL]
+        df.sort_values(DATETIME_COL, ascending=True)[DATETIME_COL]
         .unique()
         .to_pydatetime()
     )
@@ -161,9 +161,9 @@ def generate_positions(
             }
         )
         .reset_index()
-        .rename(columns={"index": TIMESTAMP_COL})
+        .rename(columns={"index": DATETIME_COL})
     )
-    df = df.merge(dm_df, how="left", on=TIMESTAMP_COL)
+    df = df.merge(dm_df, how="left", on=DATETIME_COL)
 
     # Apply cross-sectional weighting, if applicable
     if cross_sectional_percentage is not None:
@@ -244,7 +244,7 @@ def generate_volatility_forecast(df: pd.DataFrame) -> pd.Series:
 def generate_signal_rank(df: pd.DataFrame, signal: str) -> pd.Series:
     return (
         df.loc[~df[signal].isna()]
-        .groupby([TIMESTAMP_COL])[signal]
+        .groupby([DATETIME_COL])[signal]
         .rank(method="dense", ascending=False)
         .astype(int)
         .fillna(np.inf)
@@ -254,17 +254,17 @@ def generate_signal_rank(df: pd.DataFrame, signal: str) -> pd.Series:
 def get_num_unique_assets(df: pd.DataFrame) -> pd.Series:
     return (
         df.loc[~df[SCALED_SIGNAL_COL].isna()]
-        .groupby(TIMESTAMP_COL)[TICKER_COL]
+        .groupby(DATETIME_COL)[TICKER_COL]
         .transform(pd.Series.nunique)
     )
 
 
 def get_num_open_positions(df: pd.DataFrame) -> pd.DataFrame:
     # Log open positions
-    df[NUM_OPEN_LONG_POSITIONS_COL] = df.groupby(TIMESTAMP_COL)[
+    df[NUM_OPEN_LONG_POSITIONS_COL] = df.groupby(DATETIME_COL)[
         SCALED_SIGNAL_COL
     ].transform(lambda x: (x > 0).sum())
-    df[NUM_OPEN_SHORT_POSITIONS_COL] = df.groupby(TIMESTAMP_COL)[
+    df[NUM_OPEN_SHORT_POSITIONS_COL] = df.groupby(DATETIME_COL)[
         SCALED_SIGNAL_COL
     ].transform(lambda x: (x < 0).sum())
     df[NUM_OPEN_POSITIONS_COL] = (

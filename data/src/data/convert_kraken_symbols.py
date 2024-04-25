@@ -5,6 +5,7 @@ import ccxt
 import numpy as np
 import pandas as pd
 
+from ccxt_custom.kraken import KrakenExchange
 from data.constants import TICKER_COL
 from data.utils import load_ohlc_csv
 
@@ -62,10 +63,8 @@ def convert_tickers(kraken: ccxt.kraken, input_path: str, output_path: str):
 
 def main(args):
     # Initialize the Kraken exchange and load markets
-    kraken = ccxt.kraken(
+    kraken = KrakenExchange(
         {
-            "apiKey": "EvqEd6Mn/yPHovibTJXKl0UAnoQPvs7yxRIPO/AOj4ifbavMH66M1HYF",
-            "secret": "8w9/RnVsau3IKNH0/cYliHr+pqroxAAR0qecaKscYBVyFRaOerUerVOLiGpCLO/aduyTpdaSRU4xgl+4ERQl5w==",  # noqa: B950
             "enableRateLimit": True,
         }
     )

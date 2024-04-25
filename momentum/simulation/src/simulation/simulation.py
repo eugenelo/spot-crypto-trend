@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 from core.constants import POSITION_COL
-from data.constants import TICKER_COL, TIMESTAMP_COL
+from data.constants import DATETIME_COL, TICKER_COL
 from position_generation.v1 import CRYPTO_MOMO_DEFAULT_PARAMS, generate_positions_v1
 
 
@@ -21,7 +21,7 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
     df_analysis["strat_simple_returns_weekly"] = df_analysis.apply(
         lambda x: (
             x[POSITION_COL] * x["next_6d_returns"]
-            if x[TIMESTAMP_COL].day_name() == "Thursday"
+            if x[DATETIME_COL].day_name() == "Thursday"
             else 0
         ),
         axis=1,
@@ -37,7 +37,7 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
 
     # Plot cumulative returns
     df_cumulative = (
-        df_analysis.groupby(TIMESTAMP_COL)
+        df_analysis.groupby(DATETIME_COL)
         .agg(
             {
                 "strat_simple_returns_daily": "sum",
@@ -47,9 +47,9 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
             }
         )
         .reset_index()
-        .sort_values(by=TIMESTAMP_COL)
+        .sort_values(by=DATETIME_COL)
     )
-    df_cumulative[TIMESTAMP_COL] = pd.to_datetime(df_cumulative[TIMESTAMP_COL])
+    df_cumulative[DATETIME_COL] = pd.to_datetime(df_cumulative[DATETIME_COL])
     df_cumulative["strat_log_returns_daily"] = np.log(
         df_cumulative["strat_simple_returns_daily"] + 1
     )
@@ -79,7 +79,7 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
 
     fig = px.line(
         df_cumulative,
-        x=TIMESTAMP_COL,
+        x=DATETIME_COL,
         y=[
             "cum_strat_log_returns_daily",
             "cum_strat_log_returns_weekly",
@@ -90,7 +90,7 @@ def simulation(df_analysis: pd.DataFrame) -> pd.DataFrame:
     fig.show()
     fig = px.line(
         df_cumulative,
-        x=TIMESTAMP_COL,
+        x=DATETIME_COL,
         y=[
             "cum_strat_returns_daily",
             "cum_strat_returns_weekly",

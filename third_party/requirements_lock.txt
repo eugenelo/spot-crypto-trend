@@ -388,9 +388,9 @@ blosc2==2.6.0 \
     # via
     #   tables
     #   vectorbtpro
-ccxt==4.0.3 \
-    --hash=sha256:0fd4c0bcfc3a539f07757cb903d0326dfe1a4f45b131a85f0b0b24fe129e7e13 \
-    --hash=sha256:6b251a65d06953267f4fe683c60f8233d348e1c173a55103206b9981e46169bc
+ccxt==4.3.2 \
+    --hash=sha256:63f99e173be9f8f95042932db5c008a6c83845978542f3015f83b7fdc939a1e2 \
+    --hash=sha256:af3de8ed05c9dba192b0db9b1f1387a1c5ae5c5fb602630d48ef90a9d7949b1d
     # via -r third_party/requirements.txt
 certifi==2024.2.2 \
     --hash=sha256:0569859f95fc761b18b45ef421b1290a0f65f147e92a1e5eb3e635f9a5e4e66f \
@@ -3141,6 +3141,7 @@ typing-extensions==4.10.0 \
     --hash=sha256:b0abd7c89e8fb96f98db18d86106ff1d90ab692004eb746cf6eda2682f91b3cb
     # via
     #   alembic
+    #   ccxt
     #   ipython
     #   sqlalchemy
     #   static-frame

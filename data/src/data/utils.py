@@ -8,6 +8,7 @@ import pytz
 
 from data.constants import (
     CLOSE_COL,
+    DATETIME_COL,
     DOLLAR_VOLUME_COL,
     HIGH_COL,
     ID_COL,
@@ -15,7 +16,6 @@ from data.constants import (
     OHLC_COLUMNS,
     OPEN_COL,
     TICKER_COL,
-    TIMESTAMP_COL,
     VOLUME_COL,
     VWAP_COL,
 )
@@ -52,14 +52,14 @@ def load_ohlc_to_hourly_filtered(
 
 
 def load_ohlc_csv(input_path: str) -> pd.DataFrame:
-    df = pd.read_csv(input_path, parse_dates=[TIMESTAMP_COL])[OHLC_COLUMNS]
-    df.index = pd.to_datetime(df.pop(TIMESTAMP_COL), utc=True, format="mixed")
+    df = pd.read_csv(input_path, parse_dates=[DATETIME_COL])[OHLC_COLUMNS]
+    df.index = pd.to_datetime(df.pop(DATETIME_COL), utc=True, format="mixed")
     return df
 
 
 def valid_ohlc_dataframe(df: pd.DataFrame, freq: str) -> bool:
     # Ensure that no duplicate rows exist for (ticker, timestamp) combination
-    duplicate = df.duplicated(subset=[TICKER_COL, TIMESTAMP_COL], keep=False)
+    duplicate = df.duplicated(subset=[TICKER_COL, DATETIME_COL], keep=False)
     if duplicate.any():
         print(f"Duplicate data: {df.loc[duplicate]}")
         return False
@@ -68,10 +68,10 @@ def valid_ohlc_dataframe(df: pd.DataFrame, freq: str) -> bool:
     tickers = df[TICKER_COL].unique()
     for ticker in tickers:
         df_ticker = df.loc[df[TICKER_COL] == ticker]
-        start_date = df_ticker[TIMESTAMP_COL].min()  # Start of your data
-        end_date = df_ticker[TIMESTAMP_COL].max()  # End of your data
+        start_date = df_ticker[DATETIME_COL].min()  # Start of your data
+        end_date = df_ticker[DATETIME_COL].max()  # End of your data
         full_date_range = pd.date_range(start=start_date, end=end_date, freq=freq)
-        missing_dates = full_date_range.difference(df_ticker[TIMESTAMP_COL])
+        missing_dates = full_date_range.difference(df_ticker[DATETIME_COL])
         if not missing_dates.empty:
             print(f"Missing Dates: {ticker} - {missing_dates}")
             return False
@@ -124,7 +124,7 @@ def _load_ohlc_to_dataframe_filtered(
             f"Unsupported data frequency pair! input_freq={input_freq},"
             f" output_freq={output_freq}"
         )
-    df = df.sort_values(by=[TICKER_COL, TIMESTAMP_COL], ascending=True)
+    df = df.sort_values(by=[TICKER_COL, DATETIME_COL], ascending=True)
 
     # Filter blacklisted symbol pairs
     if whitelist_fn is not None:
@@ -154,14 +154,14 @@ def _resample_ohlc_hour_to_day(df_hourly: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
     df_daily[VWAP_COL] = df_daily[DOLLAR_VOLUME_COL] / df_daily[VOLUME_COL]
-    df_daily[TIMESTAMP_COL] = pd.to_datetime(df_daily[TIMESTAMP_COL])
-    df_daily = df_daily.sort_values(by=[TICKER_COL, TIMESTAMP_COL])
+    df_daily[DATETIME_COL] = pd.to_datetime(df_daily[DATETIME_COL])
+    df_daily = df_daily.sort_values(by=[TICKER_COL, DATETIME_COL])
     return df_daily
 
 
 def fill_missing_ohlc(df: pd.DataFrame) -> pd.DataFrame:
     # Ensure data is sorted chronologically
-    df = df.sort_values(by=[TICKER_COL, TIMESTAMP_COL], ascending=True)
+    df = df.sort_values(by=[TICKER_COL, DATETIME_COL], ascending=True)
 
     # Fill in close first to avoid having to shift
     df[CLOSE_COL] = df.groupby(TICKER_COL)[CLOSE_COL].ffill()

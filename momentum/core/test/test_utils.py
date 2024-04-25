@@ -3,7 +3,7 @@ import unittest
 import pandas as pd
 
 from core.utils import apply_hysteresis, get_periods_per_day
-from data.constants import PRICE_COL, TICKER_COL, TIMESTAMP_COL
+from data.constants import DATETIME_COL, PRICE_COL, TICKER_COL
 
 
 class TestSimulationUtils(unittest.TestCase):
@@ -20,16 +20,16 @@ class TestSimulationUtils(unittest.TestCase):
 
     def test_apply_hysteresis(self):
         df, start_date = self.setup()
-        df = df.reset_index().rename(columns={"index": TIMESTAMP_COL})
+        df = df.reset_index().rename(columns={"index": DATETIME_COL})
         # Transform dataframe from wide to long
         df = pd.melt(
             df,
-            id_vars=[TIMESTAMP_COL],
+            id_vars=[DATETIME_COL],
             value_vars=["A", "B"],
             var_name=TICKER_COL,
             value_name=PRICE_COL,
         )
-        df = df.sort_values(by=[TICKER_COL, TIMESTAMP_COL], ascending=True)
+        df = df.sort_values(by=[TICKER_COL, DATETIME_COL], ascending=True)
 
         entry_threshold = 10
         exit_threshold = 7

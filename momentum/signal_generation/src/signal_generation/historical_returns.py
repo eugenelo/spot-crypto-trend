@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from core.constants import LOG_RETURNS_COL, PRICE_COL_SIGNAL_GEN, RETURNS_COL
-from data.constants import TIMESTAMP_COL
+from data.constants import DATETIME_COL
 from signal_generation.common import (
     bins,
     ema,
@@ -57,8 +57,8 @@ def create_historical_return_signals(
         )
 
     # Add helper cols
-    df["day"] = pd.DatetimeIndex(df[TIMESTAMP_COL]).day
-    df["month"] = pd.DatetimeIndex(df[TIMESTAMP_COL]).month
-    df["year"] = pd.DatetimeIndex(df[TIMESTAMP_COL]).year
+    df["day"] = pd.DatetimeIndex(df[DATETIME_COL]).day
+    df["month"] = pd.DatetimeIndex(df[DATETIME_COL]).month
+    df["year"] = pd.DatetimeIndex(df[DATETIME_COL]).year
 
     return df

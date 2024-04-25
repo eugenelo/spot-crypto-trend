@@ -1,10 +1,13 @@
 from functools import reduce
-from typing import List
+from typing import List, Optional
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import plotly.express as px
+import seaborn as sns
 
-from data.constants import TIMESTAMP_COL
+from data.constants import DATETIME_COL
 from simulation.vbt import (
     ENTRY_TIMESTAMP_COL,
     EXIT_TIMESTAMP_COL,
@@ -69,10 +72,10 @@ def get_trade_volume(pf_portfolio: vbt.Portfolio) -> pd.Series:
         entry_trades["Size"] * entry_trades["Avg Entry Price"]
     )
     entry_volume = entry_trades[[ENTRY_TIMESTAMP_COL, "Entry Size [$]"]]
-    entry_volume = entry_volume.rename(columns={ENTRY_TIMESTAMP_COL: TIMESTAMP_COL})
+    entry_volume = entry_volume.rename(columns={ENTRY_TIMESTAMP_COL: DATETIME_COL})
     entry_volume = (
-        entry_volume.sort_values(by=TIMESTAMP_COL)
-        .groupby(TIMESTAMP_COL)
+        entry_volume.sort_values(by=DATETIME_COL)
+        .groupby(DATETIME_COL)
         .agg({"Entry Size [$]": "sum"})
         .reset_index()
     )
@@ -80,15 +83,15 @@ def get_trade_volume(pf_portfolio: vbt.Portfolio) -> pd.Series:
     exit_trades = get_exit_trades(pf_portfolio)
     exit_trades["Exit Size [$]"] = entry_trades["Size"] * entry_trades["Avg Exit Price"]
     exit_volume = exit_trades[[EXIT_TIMESTAMP_COL, "Exit Size [$]"]]
-    exit_volume = exit_volume.rename(columns={EXIT_TIMESTAMP_COL: TIMESTAMP_COL})
+    exit_volume = exit_volume.rename(columns={EXIT_TIMESTAMP_COL: DATETIME_COL})
     exit_volume = (
-        exit_volume.sort_values(by=TIMESTAMP_COL)
-        .groupby(TIMESTAMP_COL)
+        exit_volume.sort_values(by=DATETIME_COL)
+        .groupby(DATETIME_COL)
         .agg({"Exit Size [$]": "sum"})
         .reset_index()
     )
 
-    df_volume = entry_volume.merge(exit_volume, how="outer", on=TIMESTAMP_COL).fillna(
+    df_volume = entry_volume.merge(exit_volume, how="outer", on=DATETIME_COL).fillna(
         value=0
     )
     df_volume["Traded Size [$]"] = (
@@ -96,7 +99,7 @@ def get_trade_volume(pf_portfolio: vbt.Portfolio) -> pd.Series:
     )
 
     trade_volume = df_volume["Traded Size [$]"]
-    trade_volume.index = df_volume[TIMESTAMP_COL]
+    trade_volume.index = df_volume[DATETIME_COL]
     return trade_volume
 
 
@@ -144,10 +147,10 @@ def plot_cumulative_returns(
 
         # Reindex cumulative returns to be consistent with the first portfolio's index
         if i == 0:
-            first_pf_cumulative = df_cumulative.set_index(TIMESTAMP_COL)
+            first_pf_cumulative = df_cumulative.set_index(DATETIME_COL)
         else:
             df_cumulative = (
-                df_cumulative.set_index(TIMESTAMP_COL)
+                df_cumulative.set_index(DATETIME_COL)
                 .reindex(first_pf_cumulative.index)
                 .ffill()
                 .reset_index()
@@ -157,12 +160,12 @@ def plot_cumulative_returns(
 
     # Plot all cum returns overlayed on one plot
     df_cumulative = reduce(
-        lambda left, right: pd.merge(left, right, on=[TIMESTAMP_COL], how="outer"),
+        lambda left, right: pd.merge(left, right, on=[DATETIME_COL], how="outer"),
         cumulative_returns,
     )
     fig = px.line(
         df_cumulative,
-        x=TIMESTAMP_COL,
+        x=DATETIME_COL,
         y=portfolio_names,
         title="Cumulative Returns",
     )
@@ -183,10 +186,10 @@ def plot_rolling_returns(
 
         # Reindex returns to be consistent with the first portfolio's index
         if i == 0:
-            first_pf_returns = pf_returns.set_index(TIMESTAMP_COL)
+            first_pf_returns = pf_returns.set_index(DATETIME_COL)
         else:
             pf_returns = (
-                pf_returns.set_index(TIMESTAMP_COL)
+                pf_returns.set_index(DATETIME_COL)
                 .reindex(first_pf_returns.index)
                 .ffill()
                 .reset_index()
@@ -196,16 +199,225 @@ def plot_rolling_returns(
 
     # Plot all rolling returns overlayed on one plot
     rolling_returns = [
-        x.set_index(TIMESTAMP_COL).rolling(window).mean().reset_index() for x in returns
+        x.set_index(DATETIME_COL).rolling(window).mean().reset_index() for x in returns
     ]
     df_rolling = reduce(
-        lambda left, right: pd.merge(left, right, on=[TIMESTAMP_COL], how="outer"),
+        lambda left, right: pd.merge(left, right, on=[DATETIME_COL], how="outer"),
         rolling_returns,
     )
     fig = px.line(
         df_rolling,
-        x=TIMESTAMP_COL,
+        x=DATETIME_COL,
         y=portfolio_names,
         title=f"Rolling {window}d Returns",
     )
     fig.show()
+
+
+def _comp(returns: pd.Series):
+    """Calculates total compounded returns"""
+    return returns.add(1).prod() - 1
+
+
+def plot_returns_distribution(
+    returns: pd.Series,
+    benchmark: Optional[pd.Series] = None,
+    resampling_freq="ME",
+    bins=20,
+    fontname="Arial",
+    title="Returns",
+    kde=True,
+    figsize=(10, 6),
+    ylabel=True,
+    subtitle=True,
+    compounded=True,
+    savefig=None,
+    show=True,
+):
+    colors = [
+        "#FEDD78",
+        "#348DC1",
+        "#BA516B",
+        "#4FA487",
+        "#9B59B6",
+        "#613F66",
+        "#84B082",
+        "#DC136C",
+        "#559CAD",
+        "#4A5899",
+    ]
+
+    apply_fnc = _comp if compounded else np.sum
+    if benchmark is not None:
+        benchmark = (
+            benchmark.fillna(0)
+            .resample(resampling_freq)
+            .apply(apply_fnc)
+            .resample(resampling_freq)
+            .last()
+        )
+
+    returns = (
+        returns.fillna(0)
+        .resample(resampling_freq)
+        .apply(apply_fnc)
+        .resample(resampling_freq)
+        .last()
+    )
+
+    figsize = (0.995 * figsize[0], figsize[1])
+    fig, ax = plt.subplots(figsize=figsize)
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+
+    fig.suptitle(
+        title, y=0.94, fontweight="bold", fontname=fontname, fontsize=14, color="black"
+    )
+
+    if subtitle:
+        ax.set_title(
+            "%s - %s           \n"
+            % (
+                returns.index.date[:1][0].strftime("%Y"),
+                returns.index.date[-1:][0].strftime("%Y"),
+            ),
+            fontsize=12,
+            color="gray",
+        )
+
+    fig.set_facecolor("white")
+    ax.set_facecolor("white")
+
+    if isinstance(returns, pd.DataFrame) and len(returns.columns) == 1:
+        returns = returns[returns.columns[0]]
+
+    pallete = colors[1:2] if benchmark is None else colors[:2]
+    alpha = 0.7
+    if isinstance(returns, pd.DataFrame):
+        pallete = (
+            colors[1 : len(returns.columns) + 1]
+            if benchmark is None
+            else colors[: len(returns.columns) + 1]
+        )
+        if len(returns.columns) > 1:
+            alpha = 0.5
+
+    if benchmark is not None:
+        benchmark_df = benchmark.to_frame().rename(mapper=lambda x: "benchmark", axis=1)
+        if isinstance(returns, pd.Series):
+            returns_df = returns.to_frame().rename(mapper=lambda x: "Returns", axis=1)
+            combined_returns = (
+                benchmark_df.join(returns_df)
+                .stack()
+                .reset_index()
+                .rename(columns={"level_1": "", 0: "Returns"})
+            )
+        elif isinstance(returns, pd.DataFrame):
+            combined_returns = (
+                benchmark_df.join(returns)
+                .stack()
+                .reset_index()
+                .rename(columns={"level_1": "", 0: "Returns"})
+            )
+        sns.histplot(
+            data=combined_returns,
+            x="Returns",
+            bins=bins,
+            alpha=alpha,
+            kde=kde,
+            stat="density",
+            hue="",
+            palette=pallete,
+            ax=ax,
+        )
+
+    else:
+        if isinstance(returns, pd.Series):
+            combined_returns = returns.copy()
+            if kde:
+                sns.kdeplot(data=combined_returns, color="black", ax=ax)
+            sns.histplot(
+                data=combined_returns,
+                bins=bins,
+                alpha=alpha,
+                kde=False,
+                stat="density",
+                color=colors[1],
+                ax=ax,
+            )
+
+        elif isinstance(returns, pd.DataFrame):
+            combined_returns = (
+                returns.stack()
+                .reset_index()
+                .rename(columns={"level_1": "", 0: "Returns"})
+            )
+            # sns.kdeplot(data=combined_returns, color='black', ax=ax)
+            sns.histplot(
+                data=combined_returns,
+                x="Returns",
+                bins=bins,
+                alpha=alpha,
+                kde=kde,
+                stat="density",
+                hue="",
+                palette=pallete,
+                ax=ax,
+            )
+
+    # Why do we need average?
+    if isinstance(combined_returns, pd.Series) or len(combined_returns.columns) == 1:
+        ax.axvline(
+            combined_returns.mean(),
+            ls="--",
+            lw=1.5,
+            zorder=2,
+            label="Average",
+            color="red",
+        )
+
+    # plt.setp(x.get_legend().get_texts(), fontsize=11)
+    ax.xaxis.set_major_formatter(
+        plt.FuncFormatter(lambda x, loc: "{:,}%".format(int(x * 100)))
+    )
+
+    # Removed static lines for clarity
+    # ax.axhline(0.01, lw=1, color="#000000", zorder=2)
+    # ax.axvline(0, lw=1, color="#000000", zorder=2)
+
+    ax.set_xlabel("")
+    ax.set_ylabel(
+        "Occurrences", fontname=fontname, fontweight="bold", fontsize=12, color="black"
+    )
+    ax.yaxis.set_label_coords(-0.1, 0.5)
+
+    # fig.autofmt_xdate()
+
+    try:
+        plt.subplots_adjust(hspace=0, bottom=0, top=1)
+    except Exception:
+        pass
+
+    try:
+        fig.tight_layout()
+    except Exception:
+        pass
+
+    if savefig:
+        if isinstance(savefig, dict):
+            plt.savefig(**savefig)
+        else:
+            plt.savefig(savefig)
+
+    if show:
+        plt.show(block=False)
+
+    plt.close()
+
+    if not show:
+        return fig
+
+    return None

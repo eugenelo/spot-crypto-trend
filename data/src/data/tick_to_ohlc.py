@@ -11,6 +11,7 @@ from tqdm.auto import tqdm
 
 from data.constants import (
     CLOSE_COL,
+    DATETIME_COL,
     DOLLAR_VOLUME_COL,
     HIGH_COL,
     ID_COL,
@@ -185,17 +186,19 @@ def tick_to_ohlc(
 
     # Convert timestamp column to datetime
     df_tick = df_tick.with_columns(
-        pl.col(TIMESTAMP_COL).map_elements(lambda x: datetime.utcfromtimestamp(x))
-    ).sort(TIMESTAMP_COL)
+        datetime=pl.col(TIMESTAMP_COL).map_elements(
+            lambda x: datetime.utcfromtimestamp(x)
+        )
+    ).sort(DATETIME_COL)
 
     if start is not None:
         # Filter on start
         df_tick = df_tick.filter(
-            pl.col(TIMESTAMP_COL) >= pd.to_datetime(start, utc=True)
+            pl.col(DATETIME_COL) >= pd.to_datetime(start, utc=True)
         )
     if end is not None:
         # Filter on start
-        df_tick = df_tick.filter(pl.col(TIMESTAMP_COL) <= pd.to_datetime(end, utc=True))
+        df_tick = df_tick.filter(pl.col(DATETIME_COL) <= pd.to_datetime(end, utc=True))
 
     # Define a custom aggregation function to compute VWAP
     def compute_vwap(args: List[pl.Series]) -> pl.Series:
@@ -204,7 +207,7 @@ def tick_to_ohlc(
         return (price * volume).sum() / volume.sum()
 
     # Resample and compute OHLCV + VWAP
-    df_ohlcv = df_tick.group_by_dynamic(TIMESTAMP_COL, every=timeframe).agg(
+    df_ohlcv = df_tick.group_by_dynamic(DATETIME_COL, every=timeframe).agg(
         [
             pl.col(PRICE_COL).first().alias(OPEN_COL),
             pl.col(PRICE_COL).max().alias(HIGH_COL),
@@ -219,7 +222,7 @@ def tick_to_ohlc(
         ]
     )
     # Fill in missing dates
-    df_ohlcv = df_ohlcv.upsample(time_column=TIMESTAMP_COL, every=timeframe)
+    df_ohlcv = df_ohlcv.upsample(time_column=DATETIME_COL, every=timeframe)
     # Fill in close first to avoid having to shift
     df_ohlcv = df_ohlcv.with_columns(pl.col(CLOSE_COL).fill_null(strategy="forward"))
     df_ohlcv = df_ohlcv.with_columns(
@@ -334,7 +337,7 @@ def process_multiple_paths(
         df_tick = read_tick_csv(input_path)
         df_tick_combined = df_tick_combined.vstack(df_tick)
     df_tick_combined.rechunk()
-    df_tick_combined = df_tick_combined.sort(TIMESTAMP_COL)
+    df_tick_combined = df_tick_combined.sort(DATETIME_COL)
     assert valid_tick_df_polars(
         df_tick_combined, combined=True
     ), f"Combined tick data for {input_paths[0].parent} invalid!"
@@ -396,7 +399,6 @@ def auto_update(input_dir: Path, output_dir: Path, timeframe: str) -> List[Faile
             if filter_auto_update_paths(
                 path=input_path, write_start_date=write_start_date
             ):
-                print(f"{output_path} already exists, skipping!")
                 continue
         try:
             process_single_path(

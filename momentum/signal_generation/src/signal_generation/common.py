@@ -1,19 +1,19 @@
 import numpy as np
 import pandas as pd
 
-from data.constants import TICKER_COL, TIMESTAMP_COL
+from data.constants import DATETIME_COL, TICKER_COL
 
 
 def sort_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """Sort dataframe for use in computing returns, rolling statistics, etc.
 
     Args:
-        df (pd.DataFrame): DataFrame containing [TICKER_COL, TIMESTAMP_COL] columns
+        df (pd.DataFrame): DataFrame containing [TICKER_COL, DATETIME_COL] columns
 
     Returns:
         pd.DataFrame: Sorted dataframe
     """
-    return df.sort_values(by=[TICKER_COL, TIMESTAMP_COL], ascending=True)
+    return df.sort_values(by=[TICKER_COL, DATETIME_COL], ascending=True)
 
 
 def returns(df: pd.DataFrame, column: str, periods: int) -> pd.Series:
@@ -209,7 +209,7 @@ def cross_sectional_abs_ema(
     abs_col = "abs_" + column
     df_tmp[abs_col] = np.abs(df_tmp[column])
     abs_cross_section_mean_col = abs_col + "_mean"
-    df_tmp[abs_cross_section_mean_col] = df_tmp.groupby(TIMESTAMP_COL)[
+    df_tmp[abs_cross_section_mean_col] = df_tmp.groupby(DATETIME_COL)[
         abs_col
     ].transform("mean")
 

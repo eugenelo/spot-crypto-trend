@@ -6,7 +6,7 @@ import static_frame as sf
 import statsmodels.api as sm
 from scipy.interpolate import interp1d
 
-from data.constants import TICKER_COL, TIMESTAMP_COL
+from data.constants import DATETIME_COL, TICKER_COL
 from position_generation.constants import (
     FDM_COL,
     IDM_COL,
@@ -27,7 +27,7 @@ def compute_idm(
     last_stamp_updated = None
     idm_lst = []
     for timestamp in date_range:
-        timestamp_mask = df[TIMESTAMP_COL] == timestamp
+        timestamp_mask = df[DATETIME_COL] == timestamp
         valid_signal_mask = ~df[SCALED_SIGNAL_COL].isna()
         tickers = df.loc[(timestamp_mask) & (valid_signal_mask)][TICKER_COL]
         if tickers.shape[0] == 0:
@@ -43,7 +43,7 @@ def compute_idm(
             weights = np.full(tickers.shape, fill_value=1 / tickers.shape[0])
             # Replace negative correlations with 0
             corr = (
-                feature_mat.loc[feature_mat[TIMESTAMP_COL] <= timestamp][tickers]
+                feature_mat.loc[feature_mat[DATETIME_COL] <= timestamp][tickers]
                 .corr()
                 .fillna(value=0)
                 .to_numpy()
@@ -74,7 +74,7 @@ def compute_fdm(
     last_stamp_updated = None
     fdm_lst = []
     for timestamp in date_range:
-        timestamp_mask = df[TIMESTAMP_COL] == timestamp
+        timestamp_mask = df[DATETIME_COL] == timestamp
         valid_signal_mask = ~df[SCALED_SIGNAL_COL].isna()
         tickers = df.loc[(timestamp_mask) & (valid_signal_mask)][TICKER_COL]
         if tickers.shape[0] == 0:
@@ -91,7 +91,7 @@ def compute_fdm(
             # Replace negative correlations with 0
             corr = (
                 df.loc[
-                    (df[TIMESTAMP_COL] <= timestamp) & (df[TICKER_COL].isin(tickers))
+                    (df[DATETIME_COL] <= timestamp) & (df[TICKER_COL].isin(tickers))
                 ][feature_columns]
                 .corr()
                 .fillna(value=0)

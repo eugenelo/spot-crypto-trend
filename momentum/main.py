@@ -10,7 +10,7 @@ import yaml
 from analysis.analysis import analysis
 from core.constants import POSITION_COL, in_universe_excl_stablecoins
 from core.utils import get_periods_per_day
-from data.constants import TICKER_COL, TIMESTAMP_COL
+from data.constants import DATETIME_COL, TICKER_COL
 from data.utils import load_ohlc_to_daily_filtered  # noqa: F401
 from data.utils import load_ohlc_to_hourly_filtered  # noqa: F401
 from position_generation.benchmark import get_generate_benchmark_fn
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     periods_per_day = get_periods_per_day(
         timestamp_series=df_ohlc.loc[
             df_ohlc[TICKER_COL] == df_ohlc[TICKER_COL].unique()[0]
-        ][TIMESTAMP_COL]
+        ][DATETIME_COL]
     )
 
     # Load params
@@ -117,11 +117,11 @@ if __name__ == "__main__":
         )
 
     # Validate dates
-    data_start = df_analysis[TIMESTAMP_COL].min()
+    data_start = df_analysis[DATETIME_COL].min()
     if start_date < data_start:
         print(f"Input start_date is before start of data! Setting to {data_start}")
         start_date = data_start
-    data_end = df_analysis[TIMESTAMP_COL].max()
+    data_end = df_analysis[DATETIME_COL].max()
     if end_date > data_end:
         print(f"Input end_date is after end of data! Setting to {data_end}")
         end_date = data_end
@@ -156,8 +156,8 @@ if __name__ == "__main__":
     elif args.mode == "simulation":
         df_analysis = df_analysis.loc[
             (
-                (df_analysis[TIMESTAMP_COL] >= start_date)
-                & (df_analysis[TIMESTAMP_COL] <= end_date)
+                (df_analysis[DATETIME_COL] >= start_date)
+                & (df_analysis[DATETIME_COL] <= end_date)
             )
         ]
         simulation(df_analysis)
@@ -201,7 +201,7 @@ if __name__ == "__main__":
         if args.output_path is not None:
             output_path = Path(args.output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            nonempty_positions[[TIMESTAMP_COL, TICKER_COL, POSITION_COL]].to_csv(
+            nonempty_positions[[DATETIME_COL, TICKER_COL, POSITION_COL]].to_csv(
                 str(output_path), index=False
             )
             print(f"Wrote positions to '{output_path}'")

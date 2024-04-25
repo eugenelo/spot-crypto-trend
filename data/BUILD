@@ -64,6 +64,7 @@ py_binary(
         requirement("pytz"),
         requirement("tqdm"),
         ":data",
+        "//ccxt_custom:ccxt_custom",
     ],
 )
 
@@ -77,6 +78,7 @@ py_binary(
         requirement("pytz"),
         requirement("tqdm"),
         ":data",
+        "//ccxt_custom:ccxt_custom",
     ],
 )
 

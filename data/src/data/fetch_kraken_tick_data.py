@@ -5,7 +5,7 @@ from datetime import datetime
 from datetime import time as datetime_time
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Tuple
 
 import ccxt
 import numpy as np
@@ -14,6 +14,7 @@ import pytz
 from dateutil.relativedelta import relativedelta
 from tqdm.auto import tqdm
 
+from ccxt_custom.kraken import KrakenExchange
 from data.constants import (
     EPS_MS,
     EPS_NS,
@@ -65,64 +66,6 @@ def parse_args():
         ),
     )
     return parser.parse_args()
-
-
-class KrakenTick(ccxt.kraken):
-    def fetch_trades(
-        self,
-        symbol: str,
-        since: Optional[int] = None,
-        limit: Optional[int] = None,
-        params: Optional[dict] = None,
-    ):
-        """
-        get the list of most recent trades for a particular symbol
-        :see: https://docs.kraken.com/rest/#tag/Spot-Market-Data/operation/getRecentTrades
-        :param str symbol: unified symbol of the market to fetch trades for
-        :param int [since]: timestamp in ns of the earliest trade to fetch
-        :param int [limit]: the maximum amount of trades to fetch
-        :param dict [params]: extra parameters specific to the exchange API endpoint
-        :returns Trade[]: a list of `trade structures <https://docs.ccxt.com/#/?id=public-trades>`
-        """  # noqa: B950
-        self.load_markets()
-        market = self.market(symbol)
-        id = market["id"]
-        request = {
-            "pair": id,
-        }
-        # https://support.kraken.com/hc/en-us/articles/218198197-How-to-pull-all-trade-data-using-the-Kraken-REST-API
-        # https://github.com/ccxt/ccxt/issues/5677
-        if since is not None:
-            # request['since'] = str(since) + "000000"
-            request["since"] = str(since)  # expected to be in nanoseconds
-        if limit is not None:
-            request["count"] = limit
-
-        if params is not None:
-            request = self.extend(request, params)
-        response = self.publicGetTrades(request)
-        #
-        #     {
-        #         "error": [],
-        #         "result": {
-        #             "XETHXXBT": [
-        #                 ["0.032310","4.28169434",1541390792.763,"s","l",""]
-        #             ],
-        #             "last": "1541439421200678657"
-        #         }
-        #     }
-        #
-        result = response["result"]
-        trades = result[id]
-        # trades is a sorted array: last(most recent trade) goes last
-        length = len(trades)
-        if length <= 0:
-            return []
-        lastTrade = trades[length - 1]
-        lastTradeId = self.safe_string(result, "last")
-        lastTrade.append(lastTradeId)
-        trades[length - 1] = lastTrade
-        return self.parse_trades(trades, market, since=None, limit=limit)
 
 
 def get_symbol_output_dir(output_dir: Path, symbol: str) -> Path:
@@ -267,7 +210,11 @@ class FailedJob:
 
 def main(args):
     # Initialize the Kraken exchange
-    kraken = KrakenTick()
+    kraken = KrakenExchange(
+        {
+            "enableRateLimit": True,
+        }
+    )
 
     # Get ccxt symbols
     if args.ticker is not None:
@@ -289,7 +236,7 @@ def main(args):
     # Get starting query stamp
     if args.lookback_days is not None:
         lookback = timedelta(days=args.lookback_days)
-        start_date = datetime.combine(datetime.now() - lookback, datetime_time())
+        start_date = datetime.combine(datetime.utcnow() - lookback, datetime_time())
         since = float(kraken.parse8601(start_date.isoformat()) / 1000)
     elif args.since is not None:
         since = args.since
@@ -302,7 +249,7 @@ def main(args):
     else:
         # Don't add any buffer, otherwise symbols queried later will
         # contain more data than symbols queried earlier
-        end = float(kraken.parse8601(datetime.now().isoformat()) / 1000)
+        end = float(kraken.parse8601(datetime.utcnow().isoformat()) / 1000)
     # Convert start/end timestamps to ns.
     since_ns = int(since * 1e9)
     end_ns = int(end * 1e9)

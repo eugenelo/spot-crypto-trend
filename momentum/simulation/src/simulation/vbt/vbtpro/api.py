@@ -29,6 +29,10 @@ def get_returns(pf: vbt.Portfolio):
     return pf.returns
 
 
+def get_log_returns(pf: vbt.Portfolio):
+    return pf.get_returns(log_returns=True)
+
+
 def get_cumulative_returns(pf: vbt.Portfolio):
     return pf.cumulative_returns
 

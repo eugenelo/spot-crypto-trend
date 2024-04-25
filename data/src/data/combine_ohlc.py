@@ -8,7 +8,7 @@ import pandas as pd
 import pytz
 from tqdm.auto import tqdm
 
-from data.constants import OHLC_COLUMNS, TICKER_COL, TIMESTAMP_COL
+from data.constants import DATETIME_COL, OHLC_COLUMNS, TICKER_COL
 from data.utils import fill_missing_ohlc, valid_ohlc_dataframe
 
 
@@ -63,15 +63,15 @@ def process_fileset(
         with input_path.open() as fin:
             df_single = pd.read_csv(fin)
             df_ohlc = pd.concat([df_ohlc, df_single], ignore_index=True)
-    df_ohlc[TIMESTAMP_COL] = pd.to_datetime(df_ohlc[TIMESTAMP_COL], utc=True)
-    df_ohlc = df_ohlc.sort_values(by=[TICKER_COL, TIMESTAMP_COL], ascending=True)
+    df_ohlc[DATETIME_COL] = pd.to_datetime(df_ohlc[DATETIME_COL], utc=True)
+    df_ohlc = df_ohlc.sort_values(by=[TICKER_COL, DATETIME_COL], ascending=True)
 
     # Fill in missing dates
     min_dates = (
-        df_ohlc.groupby(TICKER_COL)[TIMESTAMP_COL].min().to_frame(name="min_timestamp")
+        df_ohlc.groupby(TICKER_COL)[DATETIME_COL].min().to_frame(name="min_timestamp")
     )
     max_dates = (
-        df_ohlc.groupby(TICKER_COL)[TIMESTAMP_COL].max().to_frame(name="max_timestamp")
+        df_ohlc.groupby(TICKER_COL)[DATETIME_COL].max().to_frame(name="max_timestamp")
     )
     dates = min_dates.merge(max_dates, how="left", on=TICKER_COL)
     mIdx = pd.MultiIndex.from_frame(
@@ -82,9 +82,9 @@ def process_fileset(
             axis=1,
         )
         .explode()
-        .reset_index(name=TIMESTAMP_COL)[[TICKER_COL, TIMESTAMP_COL]]
+        .reset_index(name=DATETIME_COL)[[TICKER_COL, DATETIME_COL]]
     )
-    df_ohlc = df_ohlc.set_index([TICKER_COL, TIMESTAMP_COL]).reindex(mIdx).reset_index()
+    df_ohlc = df_ohlc.set_index([TICKER_COL, DATETIME_COL]).reindex(mIdx).reset_index()
     df_ohlc = fill_missing_ohlc(df_ohlc)
 
     # Check for dataframe validity (no duplicates, no missing data)
@@ -95,10 +95,10 @@ def process_fileset(
         last_complete_timestamp = (
             utc_now_for_drop - pd.to_timedelta(data_frequency)
         ).floor(freq=data_frequency)
-        df_ohlc = df_ohlc.loc[df_ohlc[TIMESTAMP_COL] < last_complete_timestamp]
+        df_ohlc = df_ohlc.loc[df_ohlc[DATETIME_COL] < last_complete_timestamp]
 
     # Reset index
-    df_ohlc.sort_values(by=[TIMESTAMP_COL, TICKER_COL], ascending=True, inplace=True)
+    df_ohlc.sort_values(by=[DATETIME_COL, TICKER_COL], ascending=True, inplace=True)
     df_ohlc.index = pd.RangeIndex(len(df_ohlc.index))
 
     if output_path is None:

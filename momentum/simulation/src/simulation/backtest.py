@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 
 from core.constants import POSITION_COL, PRICE_COL_BACKTEST
-from data.constants import TICKER_COL, TIMESTAMP_COL, VOLUME_COL
+from data.constants import DATETIME_COL, TICKER_COL, VOLUME_COL
 from position_generation.constants import (
     NUM_LONG_ASSETS_COL,
     NUM_OPEN_LONG_POSITIONS_COL,
@@ -23,7 +23,7 @@ from simulation.stats import (
     plot_rolling_returns,
 )
 from simulation.utils import get_segment_mask
-from simulation.vbt import get_returns, simulate, vbt
+from simulation.vbt import get_log_returns, get_returns, simulate, vbt
 
 
 def backtest(
@@ -51,32 +51,32 @@ def backtest(
 
     def apply_time_window(df):
         if start_date is not None:
-            df = df.loc[df[TIMESTAMP_COL] >= start_date]
+            df = df.loc[df[DATETIME_COL] >= start_date]
         if end_date is not None:
-            df = df.loc[df[TIMESTAMP_COL] <= end_date]
+            df = df.loc[df[DATETIME_COL] <= end_date]
         return df
 
     df_backtest = apply_time_window(df_backtest)
 
     # Transform data from long to wide
-    df_backtest = df_backtest.sort_values([TIMESTAMP_COL, TICKER_COL])
-    price = df_backtest[[TIMESTAMP_COL, TICKER_COL, PRICE_COL_BACKTEST]]
+    df_backtest = df_backtest.sort_values([DATETIME_COL, TICKER_COL])
+    price = df_backtest[[DATETIME_COL, TICKER_COL, PRICE_COL_BACKTEST]]
     # Prices can't be exactly 0 for purpose of computing stats. If
     # they are equal to 0, it likely means that there was no volume here.
     EPS = 1e-6
     price.loc[price[PRICE_COL_BACKTEST] == 0, PRICE_COL_BACKTEST] = EPS
     price = pd.pivot_table(
         price,
-        index=TIMESTAMP_COL,
+        index=DATETIME_COL,
         columns=TICKER_COL,
         values=PRICE_COL_BACKTEST,
         dropna=False,
         fill_value=EPS,
     )
-    volume = df_backtest[[TIMESTAMP_COL, TICKER_COL, VOLUME_COL]]
+    volume = df_backtest[[DATETIME_COL, TICKER_COL, VOLUME_COL]]
     volume = pd.pivot_table(
         volume,
-        index=TIMESTAMP_COL,
+        index=DATETIME_COL,
         columns=TICKER_COL,
         values=VOLUME_COL,
         dropna=False,
@@ -85,10 +85,10 @@ def backtest(
     # Save original price index for computing daily volume later
     orig_price_index = price.index.copy()
     # Create positions for daily rebalancing
-    positions = df_backtest[[TIMESTAMP_COL, TICKER_COL, POSITION_COL]]
+    positions = df_backtest[[DATETIME_COL, TICKER_COL, POSITION_COL]]
     positions = pd.pivot_table(
         positions,
-        index=TIMESTAMP_COL,
+        index=DATETIME_COL,
         columns=TICKER_COL,
         values=POSITION_COL,
         dropna=False,
@@ -138,12 +138,12 @@ def backtest(
         tmp_for_plot = rolling_30d_trade_volume.reset_index()
         fig = px.line(
             tmp_for_plot,
-            x=TIMESTAMP_COL,
+            x=DATETIME_COL,
             y="Traded Size [$]",
             title="30d Rolling Volume",
         )
         fig.update_layout(
-            xaxis_title=TIMESTAMP_COL, yaxis_title="30d Rolling Volume", hovermode="x"
+            xaxis_title=DATETIME_COL, yaxis_title="30d Rolling Volume", hovermode="x"
         )
         fig.show()
 
@@ -153,10 +153,10 @@ def backtest(
         # Plot daily fees [%]
         tmp_for_plot = dynamic_fees.reset_index()
         fig = px.line(
-            tmp_for_plot, x=TIMESTAMP_COL, y="Fees [%]", title="Daily Fees [%]"
+            tmp_for_plot, x=DATETIME_COL, y="Fees [%]", title="Daily Fees [%]"
         )
         fig.update_layout(
-            xaxis_title=TIMESTAMP_COL, yaxis_title="Daily Fees (%)", hovermode="x"
+            xaxis_title=DATETIME_COL, yaxis_title="Daily Fees (%)", hovermode="x"
         )
         fig.show()
 
@@ -188,11 +188,20 @@ def backtest(
         # Plot returns
         df_returns = get_returns(portfolio_with_fees).reset_index()
         df_returns.rename(columns={"group": "Returns"}, inplace=True)
+        fig = px.bar(df_returns, x=DATETIME_COL, y="Returns", title="Daily Returns [%]")
+        fig.update_layout(
+            xaxis_title=DATETIME_COL, yaxis_title="Returns [%]", hovermode="x"
+        )
+        fig.show()
+
+        # Plot log returns
+        df_log_returns = get_log_returns(portfolio_with_fees).reset_index()
+        df_log_returns.rename(columns={"group": "Returns"}, inplace=True)
         fig = px.bar(
-            df_returns, x=TIMESTAMP_COL, y="Returns", title="Daily Returns [%]"
+            df_log_returns, x=DATETIME_COL, y="Returns", title="Daily Log Returns [%]"
         )
         fig.update_layout(
-            xaxis_title=TIMESTAMP_COL, yaxis_title="Returns [%]", hovermode="x"
+            xaxis_title=DATETIME_COL, yaxis_title="Log Returns [%]", hovermode="x"
         )
         fig.show()
 
@@ -207,7 +216,7 @@ def backtest(
         )
         fig = px.line(
             df_turnover,
-            x=TIMESTAMP_COL,
+            x=DATETIME_COL,
             y=[turnover_col, turnover_30d_ema_col],
             title="Turnover",
         )
@@ -215,7 +224,7 @@ def backtest(
 
         # Plot open positions
         df_tmp = (
-            df_backtest.groupby([TIMESTAMP_COL])
+            df_backtest.groupby([DATETIME_COL])
             .agg(
                 {
                     NUM_LONG_ASSETS_COL: "max",
@@ -230,7 +239,7 @@ def backtest(
         )
         fig = px.line(
             df_tmp,
-            x=TIMESTAMP_COL,
+            x=DATETIME_COL,
             y=[
                 NUM_LONG_ASSETS_COL,
                 NUM_SHORT_ASSETS_COL,

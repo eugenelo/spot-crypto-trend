@@ -9,12 +9,13 @@ import pandas as pd
 import pytz
 from tqdm.auto import tqdm
 
+from ccxt_custom.kraken import KrakenExchange
 from data.constants import (
+    DATETIME_COL,
     DOLLAR_VOLUME_COL,
     NUM_RETRY_ATTEMPTS,
     OHLC_COLUMNS,
     TICKER_COL,
-    TIMESTAMP_COL,
     VOLUME_COL,
     VWAP_COL,
 )
@@ -52,19 +53,6 @@ def parse_args():
     return parser.parse_args()
 
 
-class KrakenOHLCV(ccxt.kraken):
-    def parse_ohlcv(self, ohlcv, market=None) -> list:
-        return [
-            self.safe_timestamp(ohlcv, 0),  # timestamp
-            self.safe_number(ohlcv, 1),  # open
-            self.safe_number(ohlcv, 2),  # high
-            self.safe_number(ohlcv, 3),  # low
-            self.safe_number(ohlcv, 4),  # close
-            self.safe_number(ohlcv, 5),  # vwap
-            self.safe_number(ohlcv, 6),  # volume
-        ]
-
-
 def fetch_ohlcv_data(
     kraken: ccxt.kraken,
     symbol: str,
@@ -98,9 +86,7 @@ def fetch_ohlcv_data(
     df_ohlcv = pd.DataFrame(ohlcv, columns=OHLC_COLUMNS[:-2])
     df_ohlcv[DOLLAR_VOLUME_COL] = df_ohlcv[VWAP_COL] * df_ohlcv[VOLUME_COL]
     df_ohlcv[TICKER_COL] = symbol
-    df_ohlcv[TIMESTAMP_COL] = pd.to_datetime(
-        df_ohlcv[TIMESTAMP_COL], utc=True, unit="ms"
-    )
+    df_ohlcv[DATETIME_COL] = pd.to_datetime(df_ohlcv[DATETIME_COL], utc=True, unit="ms")
 
     if drop_last_row:
         # Drop the last row which will have incomplete data
@@ -114,7 +100,11 @@ def main(args):
         raise ValueError("Data frequency must be specified.")
 
     # Initialize the Kraken exchange
-    kraken = KrakenOHLCV()
+    kraken = KrakenExchange(
+        {
+            "enableRateLimit": True,
+        }
+    )
 
     # Get ccxt symbols
     if args.ticker is not None:
@@ -125,9 +115,7 @@ def main(args):
 
     # Fetch OHLC for each ticker, combine into a single DataFrame
     df_ohlcv = pd.DataFrame(columns=OHLC_COLUMNS)
-    df_ohlcv[TIMESTAMP_COL] = pd.to_datetime(
-        df_ohlcv[TIMESTAMP_COL], utc=True, unit="ms"
-    )
+    df_ohlcv[DATETIME_COL] = pd.to_datetime(df_ohlcv[DATETIME_COL], utc=True, unit="ms")
     for symbol in tqdm(symbols):
         print(f"Fetching data for {symbol}")
         df_symbol = fetch_ohlcv_data(
@@ -161,12 +149,12 @@ def main(args):
             assert df_ohlcv.columns.equals(df_existing_output.columns)
             df_ohlcv = pd.concat([df_existing_output, df_ohlcv])
             df_ohlcv.drop_duplicates(
-                subset=[TIMESTAMP_COL, TICKER_COL],
+                subset=[DATETIME_COL, TICKER_COL],
                 keep="last",  # Keep the latest available data
                 inplace=True,
             )
             df_ohlcv.sort_values(
-                by=[TIMESTAMP_COL, TICKER_COL], ascending=True, inplace=True
+                by=[DATETIME_COL, TICKER_COL], ascending=True, inplace=True
             )
             df_ohlcv.index = pd.RangeIndex(len(df_ohlcv.index))
         output_path = Path(args.output_path)

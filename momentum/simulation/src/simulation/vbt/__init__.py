@@ -10,6 +10,7 @@ from simulation.vbt.vbtpro.api import (
     get_entry_trades,
     get_exit_trades,
     get_final_value,
+    get_log_returns,
     get_returns,
     get_value,
 )

@@ -4,7 +4,7 @@ from datetime import timedelta
 import numpy as np
 import pandas as pd
 
-from data.constants import CLOSE_COL, TICKER_COL, TIMESTAMP_COL
+from data.constants import CLOSE_COL, DATETIME_COL, TICKER_COL
 from signal_generation.common import (
     bins,
     ema,
@@ -28,8 +28,8 @@ class TestSimulationUtils(unittest.TestCase):
         close = pd.DataFrame.from_dict(prices)
         start_date = "2020-01-01"
         dti = pd.date_range(start_date, periods=len(prices_A), freq="1d")
-        close.loc[close[TICKER_COL] == "A", TIMESTAMP_COL] = dti
-        close.loc[close[TICKER_COL] == "B", TIMESTAMP_COL] = dti
+        close.loc[close[TICKER_COL] == "A", DATETIME_COL] = dti
+        close.loc[close[TICKER_COL] == "B", DATETIME_COL] = dti
         return sort_dataframe(close), start_date
 
     def test_sort_dataframe(self):
@@ -41,14 +41,14 @@ class TestSimulationUtils(unittest.TestCase):
             self.assertEqual("A", df_prices.iloc[i][TICKER_COL])
             self.assertEqual(
                 pd.to_datetime(start_date) + timedelta(days=i),
-                df_prices.iloc[i][TIMESTAMP_COL],
+                df_prices.iloc[i][DATETIME_COL],
             )
         for i in range(5, 10):
             offset = 5
             self.assertEqual("B", df_prices.iloc[i][TICKER_COL])
             self.assertEqual(
                 pd.to_datetime(start_date) + timedelta(days=(i - offset)),
-                df_prices.iloc[i][TIMESTAMP_COL],
+                df_prices.iloc[i][DATETIME_COL],
             )
 
     def test_returns(self):

@@ -1,7 +1,7 @@
 import polars as pl
 
 # OHLC data
-TIMESTAMP_COL = "timestamp"
+DATETIME_COL = "datetime"
 OPEN_COL = "open"
 HIGH_COL = "high"
 LOW_COL = "low"
@@ -12,7 +12,7 @@ DOLLAR_VOLUME_COL = "dollar_volume"
 TICKER_COL = "ticker"
 
 OHLC_COLUMNS = [
-    TIMESTAMP_COL,
+    DATETIME_COL,
     OPEN_COL,
     HIGH_COL,
     LOW_COL,
@@ -24,8 +24,9 @@ OHLC_COLUMNS = [
 ]
 
 # Tick data
-PRICE_COL = "price"
 ID_COL = "id"
+TIMESTAMP_COL = "timestamp"
+PRICE_COL = "price"
 ORDER_SIDE_COL = "side"
 ORDER_TYPE_COL = "type"
 TICK_COLUMNS = [

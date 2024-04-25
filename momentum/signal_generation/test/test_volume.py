@@ -3,7 +3,7 @@ import unittest
 import pandas as pd
 
 from core.constants import AVG_DOLLAR_VOLUME_COL, VOLUME_FILTER_COL
-from data.constants import TICKER_COL, TIMESTAMP_COL
+from data.constants import DATETIME_COL, TICKER_COL
 from signal_generation.common import sort_dataframe
 from signal_generation.volume import create_volume_filter_mask
 
@@ -19,8 +19,8 @@ class TestVolume(unittest.TestCase):
         volume_df = pd.DataFrame.from_dict(volume)
         start_date = "2020-01-01"
         dti = pd.date_range(start_date, periods=len(volume_A), freq="1d")
-        volume_df.loc[volume_df[TICKER_COL] == "A", TIMESTAMP_COL] = dti
-        volume_df.loc[volume_df[TICKER_COL] == "B", TIMESTAMP_COL] = dti
+        volume_df.loc[volume_df[TICKER_COL] == "A", DATETIME_COL] = dti
+        volume_df.loc[volume_df[TICKER_COL] == "B", DATETIME_COL] = dti
         return sort_dataframe(volume_df), start_date
 
     def test_create_volume_filter_mask(self):

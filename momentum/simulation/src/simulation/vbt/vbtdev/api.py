@@ -1,3 +1,4 @@
+import numpy as np
 import vectorbt as vbt
 
 ENTRY_TIMESTAMP_COL = "Entry Timestamp"
@@ -27,6 +28,10 @@ def get_final_value(pf: vbt.Portfolio):
 
 def get_returns(pf: vbt.Portfolio):
     return pf.returns()
+
+
+def get_log_returns(pf: vbt.Portfolio):
+    return np.log(get_returns(pf) + 1)
 
 
 def get_cumulative_returns(pf: vbt.Portfolio):
