@@ -70,6 +70,9 @@ def parse_args():
     parser.add_argument(
         "--params_path", "-p", type=str, help="Params yaml file path", required=True
     )
+    parser.add_argument(
+        "--credentials_path", type=str, help="Credentials yaml file path", required=True
+    )
     parser.add_argument("--output_path", "-o", type=str, help="Output file path")
     return parser.parse_args()
 
@@ -245,10 +248,12 @@ def execute_trades(kraken: ccxt.kraken, df_trades: pd.DataFrame):
 
 def main(args):
     # Initialize the Kraken exchange
+    with open(args.credentials_path, "r") as yaml_file:
+        credentials = yaml.safe_load(yaml_file)
     kraken = KrakenExchange(
         {
-            "apiKey": "EvqEd6Mn/yPHovibTJXKl0UAnoQPvs7yxRIPO/AOj4ifbavMH66M1HYF",
-            "secret": "8w9/RnVsau3IKNH0/cYliHr+pqroxAAR0qecaKscYBVyFRaOerUerVOLiGpCLO/aduyTpdaSRU4xgl+4ERQl5w==",  # noqa: B950
+            "apiKey": credentials["apiKey"],
+            "secret": credentials["secret"],
         }
     )
 
