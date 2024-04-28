@@ -5,6 +5,7 @@ py_library(
     srcs = [
         "src/live/constants.py",
         "src/live/utils.py",
+        "src/live/execution.py",
     ],
     imports = ["src"],
     deps = [
@@ -16,11 +17,11 @@ py_library(
 )
 
 py_binary(
-    name="kraken",
+    name="trades",
     srcs=[
-        "src/live/kraken.py"
+        "src/live/trades.py"
     ],
-    main="kraken.py",
+    main="trades.py",
     deps = [
         requirement("ccxt"),
         requirement("pytz"),

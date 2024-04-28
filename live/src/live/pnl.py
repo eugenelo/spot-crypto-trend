@@ -261,6 +261,9 @@ def main(args):
         # Plot cumulative log returns
         fig = px.line(pnl.cumsum(), title="Cumulative Log Returns")
         fig.show()
+        # Print realized volatility
+        realized_volatility = np.sqrt(np.sum(pnl**2))
+        print(f"Realized Volatility: {100 * realized_volatility:.2f}%")
 
     return 0
 

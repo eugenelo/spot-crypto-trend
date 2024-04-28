@@ -1,5 +1,6 @@
 import argparse
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +15,11 @@ from data.constants import DATETIME_COL, TICKER_COL
 from data.utils import load_ohlc_to_daily_filtered  # noqa: F401
 from data.utils import load_ohlc_to_hourly_filtered  # noqa: F401
 from position_generation.benchmark import get_generate_benchmark_fn
+from position_generation.constants import (
+    SCALED_SIGNAL_COL,
+    VOL_FORECAST_COL,
+    VOL_TARGET_COL,
+)
 from position_generation.position_generation import get_generate_positions_fn
 from position_generation.utils import nonempty_positions
 from signal_generation.constants import get_signal_type
@@ -194,16 +200,36 @@ if __name__ == "__main__":
             skip_plots=args.skip_plots,
         )
     elif args.mode == "positions":
+        pd.set_option("display.precision", 4)
+        pd.set_option(
+            "display.float_format",
+            partial(np.format_float_positional, precision=4, trim="0"),
+        )
+
         positions = generate_positions_fn(df_analysis)
-        nonempty_positions = nonempty_positions(positions, timestamp=end_date)
-        print(nonempty_positions)
+        df_positions = nonempty_positions(positions)
+        df_positions = df_positions.loc[
+            df_positions[DATETIME_COL] == df_positions[DATETIME_COL].max()
+        ]
+
+        # Add row containing column totals for printing only
+        df_tmp = df_positions.copy().sort_values(by=POSITION_COL, ascending=False)
+        df_tmp.loc["total"] = df_tmp.sum(numeric_only=True, axis=0)
+
+        cols_of_interest = [
+            DATETIME_COL,
+            TICKER_COL,
+            VOL_FORECAST_COL,
+            VOL_TARGET_COL,
+            SCALED_SIGNAL_COL,
+            POSITION_COL,
+        ]
+        print(df_tmp[cols_of_interest])
         # Output to file
         if args.output_path is not None:
             output_path = Path(args.output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            nonempty_positions[[DATETIME_COL, TICKER_COL, POSITION_COL]].to_csv(
-                str(output_path), index=False
-            )
+            df_positions[cols_of_interest].to_csv(str(output_path), index=False)
             print(f"Wrote positions to '{output_path}'")
     else:
         raise ValueError("Unsupported mode")

@@ -29,10 +29,18 @@ def portfolio_value(positions: Dict[str, float], df_prices: pd.DataFrame) -> flo
     return value
 
 
+def fetch_mid_price(exchange: ccxt.Exchange, ticker: str) -> float:
+    ticker_stats = exchange.fetch_ticker(ticker)
+    bid = ticker_stats["bid"]
+    ask = ticker_stats["ask"]
+    mid = (bid + ask) / 2
+    return mid
+
+
 def fetch_cash_balances(exchange: ccxt.Exchange, verbose: bool) -> Dict[str, float]:
     # Balances to ignore when computing available cash value
     # Units are in currency
-    bal_to_ignore = {"BTC": 0.11440919, "USD": 12000}
+    bal_to_ignore = {"BTC": 0.11440919, BASE_CURRENCY: 12000}
 
     # Fetch account balance
     balance = exchange.fetch_balance()["total"]
@@ -40,9 +48,10 @@ def fetch_cash_balances(exchange: ccxt.Exchange, verbose: bool) -> Dict[str, flo
     # Iterate through each asset in the balance
     assets_to_remove = []
     for asset, amount in balance.items():
-        if asset != "USD":
+        if asset != BASE_CURRENCY:
             # Fetch current market price of the asset
-            market_price = exchange.fetch_ticker(f"{asset}/USD")["last"]
+            ticker = f"{asset}/{BASE_CURRENCY}"
+            market_price = fetch_mid_price(exchange=exchange, ticker=ticker)
         else:
             market_price = 1.0
 

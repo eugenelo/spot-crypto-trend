@@ -95,7 +95,7 @@ def process_fileset(
         last_complete_timestamp = (
             utc_now_for_drop - pd.to_timedelta(data_frequency)
         ).floor(freq=data_frequency)
-        df_ohlc = df_ohlc.loc[df_ohlc[DATETIME_COL] < last_complete_timestamp]
+        df_ohlc = df_ohlc.loc[df_ohlc[DATETIME_COL] <= last_complete_timestamp]
 
     # Reset index
     df_ohlc.sort_values(by=[DATETIME_COL, TICKER_COL], ascending=True, inplace=True)
