@@ -30,7 +30,6 @@ from signal_generation.signal_generation import (
 from simulation.backtest import backtest_crypto
 from simulation.constants import DEFAULT_REBALANCING_BUFFER, DEFAULT_VOLUME_MAX_SIZE
 from simulation.optimize import optimize
-from simulation.simulation import simulation
 from simulation.utils import rebal_freq_supported
 
 
@@ -159,14 +158,6 @@ if __name__ == "__main__":
 
     if args.mode == "analysis":
         analysis(df_analysis)
-    elif args.mode == "simulation":
-        df_analysis = df_analysis.loc[
-            (
-                (df_analysis[DATETIME_COL] >= start_date)
-                & (df_analysis[DATETIME_COL] <= end_date)
-            )
-        ]
-        simulation(df_analysis)
     elif args.mode == "backtest":
         # Get position and benchmark generation functions
         assert (
