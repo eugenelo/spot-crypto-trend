@@ -1,14 +1,20 @@
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict
 
 import ccxt
 import numpy as np
 import pandas as pd
+import pytz
+from ccxt.base.types import OrderBook
 
 from ccxt_custom.kraken import KrakenExchange
 from data.constants import CLOSE_COL, DATETIME_COL, TICKER_COL, TIMESTAMP_COL
 from live.constants import (
     BASE_CURRENCY,
+    CURRENT_AMOUNT_COL,
+    CURRENT_DOLLAR_POSITION_COL,
+    CURRENT_PRICE_COL,
     HISTORICAL_TRADE_COLUMNS,
     ID_COL,
     LEDGER_COLUMNS,
@@ -23,21 +29,31 @@ def portfolio_value(positions: Dict[str, float], df_prices: pd.DataFrame) -> flo
         else:
             # Translate ticker to base currency with day's close price
             close = df_prices.loc[df_prices[TICKER_COL] == ticker, CLOSE_COL]
-            assert close.size == 1
+            assert close.size == 1, f"{ticker}, {df_prices}"
             close = close.iloc[0]
             value += amount * close
     return value
 
 
-def fetch_mid_price(exchange: ccxt.Exchange, ticker: str) -> float:
-    ticker_stats = exchange.fetch_ticker(ticker)
-    bid = ticker_stats["bid"]
-    ask = ticker_stats["ask"]
-    mid = (bid + ask) / 2
-    return mid
+@dataclass
+class BalanceEntry:
+    ticker: str
+    amount: float
+    base_currency: float
+    mid_price: float
 
 
-def fetch_cash_balances(exchange: ccxt.Exchange, verbose: bool) -> Dict[str, float]:
+def fetch_balance(exchange: ccxt.Exchange) -> Dict[str, BalanceEntry]:
+    """Fetch balance in both asset units and base currency units.
+
+    Base currency unit translation is doing using mid prices.
+
+    Args:
+        exchange (ccxt.Exchange): Exchange interface
+
+    Returns:
+        Dict[str, BalanceEntry]: Dict from ticker -> BalanceEntry
+    """
     # Balances to ignore when computing available cash value
     # Units are in currency
     bal_to_ignore = {"BTC": 0.11440919, BASE_CURRENCY: 12000}
@@ -45,14 +61,15 @@ def fetch_cash_balances(exchange: ccxt.Exchange, verbose: bool) -> Dict[str, flo
     # Fetch account balance
     balance = exchange.fetch_balance()["total"]
 
-    # Iterate through each asset in the balance
-    assets_to_remove = []
+    # Mark assets to market
+    out: Dict[str, BalanceEntry] = {}
     for asset, amount in balance.items():
         if asset != BASE_CURRENCY:
             # Fetch current market price of the asset
             ticker = f"{asset}/{BASE_CURRENCY}"
-            market_price = fetch_mid_price(exchange=exchange, ticker=ticker)
+            market_price = fetch_bid_ask_spread(exchange=exchange, ticker=ticker).mid
         else:
+            ticker = asset
             market_price = 1.0
 
         # Calculate the cash value of the position
@@ -61,25 +78,58 @@ def fetch_cash_balances(exchange: ccxt.Exchange, verbose: bool) -> Dict[str, flo
         cash_value = amount * market_price
         if np.abs(cash_value) < 0.001:
             # Ignore asset
-            assets_to_remove.append(asset)
             continue
 
-        if verbose:
-            print(
-                f"Asset: {asset}, Amount: {amount:.4f}, Market Price:"
-                f" ${market_price:.2f}, Cash Value: ${cash_value:.2f}"
-            )
-        balance[asset] = cash_value
+        out[ticker] = BalanceEntry(
+            ticker=ticker,
+            amount=amount,
+            base_currency=cash_value,
+            mid_price=market_price,
+        )
 
-    for asset in assets_to_remove:
-        del balance[asset]
+    return out
 
-    return balance
+
+def balance_to_dataframe(balance: Dict[str, BalanceEntry]) -> pd.DataFrame:
+    """Convert balance dictionary to DataFrame
+
+    Args:
+        balance (Dict[str, BalanceEntry]): Balance from `fetch_balance()`
+
+    Returns:
+        pd.DataFrame: Balance DataFrame
+    """
+    balance_unrolled = {
+        TICKER_COL: [],
+        CURRENT_DOLLAR_POSITION_COL: [],
+        CURRENT_AMOUNT_COL: [],
+        CURRENT_PRICE_COL: [],
+    }
+    for ticker, balance_entry in balance.items():
+        balance_unrolled[TICKER_COL].append(ticker)
+        balance_unrolled[CURRENT_DOLLAR_POSITION_COL].append(
+            balance_entry.base_currency
+        )
+        balance_unrolled[CURRENT_AMOUNT_COL].append(balance_entry.amount)
+        balance_unrolled[CURRENT_PRICE_COL].append(balance_entry.mid_price)
+    return pd.DataFrame.from_dict(balance_unrolled)
+
+
+def get_account_size(balance: Dict[str, BalanceEntry]) -> float:
+    """Get size of account in base currency units from balance.
+
+    Args:
+        balance (Dict[str, BalanceEntry]): Balance from `fetch_balance()`
+
+    Returns:
+        float: Account size base currency units
+    """
+    return sum([entry.base_currency for entry in balance.values()])
 
 
 def fetch_my_trades(kraken: KrakenExchange, start_date: datetime) -> pd.DataFrame:
     all_trades = []
-    trades = kraken.fetch_my_trades(end=datetime.utcnow().timestamp())
+    trades = kraken.fetch_my_trades(end=datetime.now(tz=pytz.UTC).timestamp())
     while len(trades) > 0:
         all_trades.extend(trades[::-1])
         last_trade = trades[0]
@@ -105,7 +155,9 @@ def fetch_my_trades(kraken: KrakenExchange, start_date: datetime) -> pd.DataFram
 def fetch_deposits(kraken: KrakenExchange, start_date: datetime) -> pd.DataFrame:
     ledger = []
     params = {"type": "deposit"}
-    transactions = kraken.fetch_ledger(end=datetime.utcnow().timestamp(), params=params)
+    transactions = kraken.fetch_ledger(
+        end=datetime.now(tz=pytz.UTC).timestamp(), params=params
+    )
     while len(transactions) > 0:
         ledger.extend(transactions[::-1])
         last_tx = transactions[0]
@@ -126,3 +178,47 @@ def fetch_deposits(kraken: KrakenExchange, start_date: datetime) -> pd.DataFrame
     df_tx[DATETIME_COL] = pd.to_datetime(df_tx[DATETIME_COL], utc=True)
     # Filter trades which occurred before start date
     return df_tx.loc[df_tx[DATETIME_COL] > start_date][LEDGER_COLUMNS]
+
+
+@dataclass
+class BidAskSpread:
+    bid: float
+    ask: float
+    mid: float
+    spread: float
+    second_bid: float
+    second_ask: float
+
+
+def fetch_bid_ask_spread(exchange: ccxt.Exchange, ticker: str) -> BidAskSpread:
+    order_book = fetch_order_book(exchange=exchange, ticker=ticker)
+    bid = order_book["bids"][0][0]
+    ask = order_book["asks"][0][0]
+    mid = (bid + ask) / 2
+    spread = bid - ask
+    second_bid = order_book["bids"][1][0]
+    second_ask = order_book["asks"][1][0]
+    return BidAskSpread(
+        bid=bid,
+        ask=ask,
+        mid=mid,
+        spread=spread,
+        second_bid=second_bid,
+        second_ask=second_ask,
+    )
+
+
+def fetch_order_book(exchange: ccxt.Exchange, ticker: str) -> OrderBook:
+    """Fetch order book for ticker
+
+    Args:
+        exchange (ccxt.Exchange): Exchange interface
+        ticker (str): Ticker pair to fetch order book for
+
+    Returns:
+        OrderBook: Order book for ticker
+    """
+    limit = 500
+    order_book = exchange.fetch_order_book(symbol=ticker, limit=limit)
+    assert order_book["symbol"] == ticker
+    return order_book

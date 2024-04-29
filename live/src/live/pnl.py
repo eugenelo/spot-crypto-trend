@@ -26,9 +26,10 @@ from live.constants import (
 )
 from live.utils import (
     KrakenExchange,
-    fetch_cash_balances,
+    fetch_balance,
     fetch_deposits,
     fetch_my_trades,
+    get_account_size,
     portfolio_value,
 )
 
@@ -59,10 +60,19 @@ def get_current_pnl(kraken: ccxt.kraken, start_date: datetime, verbose: bool) ->
     ].sum()
     assert np.isfinite(starting_bankroll) and starting_bankroll > 0.0
     # Compute PNL
-    balance = fetch_cash_balances(kraken, verbose=True)
-    curr_cash_value = sum(balance.values())
-    pnl = (curr_cash_value - starting_bankroll) / starting_bankroll
+    balance = fetch_balance(kraken)
+    if verbose:
+        for ticker, balance_entry in balance.items():
+            amount = balance_entry.amount
+            market_price = balance_entry.mid_price
+            cash_value = balance_entry.base_currency
+            print(
+                f"Ticker: {ticker}, Amount: {amount:.4f}, Market Price:"
+                f" ${market_price:.2f}, Cash Value: ${cash_value:.2f}"
+            )
 
+    curr_cash_value = get_account_size(balance)
+    pnl = (curr_cash_value - starting_bankroll) / starting_bankroll
     if verbose:
         print(f"Current Cash Value: ${(curr_cash_value):.2f}")
         print(f"Starting Bankroll: ${starting_bankroll:.2f}")
@@ -146,7 +156,7 @@ def get_historical_account_size(
     # daily account size from positions + daily prices
     DT_1DAY = timedelta(days=1)
     start_date = datetime.combine(start_date, datetime_time())
-    end_date = datetime.combine(pytz.UTC.localize(datetime.utcnow()), datetime_time())
+    end_date = datetime.combine(datetime.now(tz=pytz.UTC), datetime_time())
     idx = pd.date_range(start_date, end_date, freq="1D", tz=pytz.UTC)
     account_size = pd.Series(index=idx)
     # `positions` maps from Ticker -> Amount (units in asset, NOT base currency)
@@ -180,12 +190,9 @@ def get_historical_account_size(
 
         account_size.iloc[i] = portfolio_value(positions=positions, df_prices=df_prices)
 
-    assert np.isnan(
-        account_size.iloc[-1]
-    ), "Last element in PNL series should be NAN at this point!"
-    account_size.iloc[-1] = sum(
-        fetch_cash_balances(exchange=kraken, verbose=False).values()
-    )
+    if np.isnan(account_size.iloc[-1]):
+        # Populate last day's account size with current prices
+        account_size.iloc[-1] = get_account_size(fetch_balance(kraken))
     return account_size
 
 
@@ -229,6 +236,7 @@ def main(args):
         {
             "apiKey": credentials["apiKey"],
             "secret": credentials["secret"],
+            "enableRateLimit": True,
         }
     )
     start_date = pytz.UTC.localize(

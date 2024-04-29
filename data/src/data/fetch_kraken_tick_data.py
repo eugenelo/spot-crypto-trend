@@ -236,8 +236,10 @@ def main(args):
     # Get starting query stamp
     if args.lookback_days is not None:
         lookback = timedelta(days=args.lookback_days)
-        start_date = datetime.combine(datetime.utcnow() - lookback, datetime_time())
-        since = float(kraken.parse8601(start_date.isoformat()) / 1000)
+        start_date = datetime.combine(
+            datetime.now(tz=pytz.UTC) - lookback, datetime_time()
+        )
+        since = start_date.timestamp()  # [seconds]
     elif args.since is not None:
         since = args.since
     elif args.from_latest:
@@ -249,7 +251,7 @@ def main(args):
     else:
         # Don't add any buffer, otherwise symbols queried later will
         # contain more data than symbols queried earlier
-        end = float(kraken.parse8601(datetime.utcnow().isoformat()) / 1000)
+        end = datetime.now(tz=pytz.UTC).timestamp()  # [seconds]
     # Convert start/end timestamps to ns.
     since_ns = int(since * 1e9)
     end_ns = int(end * 1e9)
@@ -263,8 +265,9 @@ def main(args):
             )
             since = float(since_ns) * 1e-9
         print(
-            f"Fetching data for {symbol} from {datetime.fromtimestamp(since)} to"
-            f" {datetime.fromtimestamp(end)}"
+            f"Fetching data for {symbol} from"
+            f" {datetime.fromtimestamp(since, tz=pytz.UTC)} to"
+            f" {datetime.fromtimestamp(end, tz=pytz.UTC)}"
         )
 
         query_ns = since_ns

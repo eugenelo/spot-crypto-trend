@@ -187,7 +187,7 @@ def tick_to_ohlc(
     # Convert timestamp column to datetime
     df_tick = df_tick.with_columns(
         datetime=pl.col(TIMESTAMP_COL).map_elements(
-            lambda x: datetime.utcfromtimestamp(x)
+            lambda x: datetime.fromtimestamp(x, tz=pytz.UTC)
         )
     ).sort(DATETIME_COL)
 
@@ -387,7 +387,7 @@ def filter_auto_update_paths(path: Path, write_start_date: datetime) -> bool:
 
 
 def auto_update(input_dir: Path, output_dir: Path, timeframe: str) -> List[FailedJob]:
-    today = pytz.utc.localize(datetime.now())
+    today = datetime.now(tz=pytz.UTC)
     write_start_date = today - timedelta(days=7)
     overwrite = True
     failed_jobs: List[FailedJob] = []

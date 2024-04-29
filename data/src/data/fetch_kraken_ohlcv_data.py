@@ -61,7 +61,7 @@ def fetch_ohlcv_data(
     drop_last_row: bool,
 ) -> Optional[pd.DataFrame]:
     # Define the timeframe (30 days)
-    since = kraken.parse8601((datetime.now() - lookback).isoformat())
+    since = kraken.parse8601((datetime.now(tz=pytz.UTC) - lookback).isoformat())
 
     # Fetch OHLCV (Open, High, Low, Close, Volume) data for each symbol
     ohlcv = None

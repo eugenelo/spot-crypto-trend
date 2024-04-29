@@ -51,3 +51,13 @@ py_binary(
         ":live",
     ],
 )
+
+
+py_test(
+    name="test_execution",
+    srcs = ["test/test_execution.py"],
+    deps = [
+        ":live",
+    ],
+    size="medium",
+)
