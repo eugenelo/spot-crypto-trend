@@ -80,3 +80,23 @@ leverage: 2.0
 # min_daily_volume: 500000.0000          1.11            19961.83         8957           350.19            70.53                 45.63                     42.03                   4.37                 136.99
 # min_daily_volume: 1000000.0000         1.05            19795.35         7303           311.86            70.19                 42.42                     42.27                   4.73                 135.86
 # # Choosing $10000 based on 1% max volume, $50000 initial balance, 0.001 min position size + Sharpe + acceptable max drawdown (diversification benefits)
+
+# backtest-quick (--start_date 2020/01/01 --end_date 2024/01/01) (git hash: 698a503f79ad817eb9e69d0e071c8dc2ab768c26)
+#                                            Benchmark                pf_Strategy
+# index
+# Annualized Return [%]                          55.38                      71.63
+# Annualized Volatility [%]                      67.83                      47.19
+# Sharpe Ratio                                     1.0                       1.38
+# Sortino Ratio                                   1.44                       1.96
+# Max Drawdown [%]                               76.67                      47.95
+# Max Drawdown Duration              784 days 00:00:00          783 days 00:00:00
+# Max Gross Exposure [%]                        100.86                     116.23
+# Win Rate [%]                                    60.0                      39.92
+# Start                      2020-01-01 00:00:00+00:00  2020-01-01 00:00:00+00:00
+# End                        2024-01-01 00:00:00+00:00  2024-01-01 00:00:00+00:00
+# Start Value [$]                              12000.0                    12000.0
+# End Value [$]                               70106.75                  104443.06
+# Total Return [%]                              484.22                     770.36
+# Total Trades                                       6                      11363
+# Total Fees Paid [$]                            42.46                    5217.29
+# Avg. Fee per Trade [$]                          7.08                       0.46

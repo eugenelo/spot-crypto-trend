@@ -115,10 +115,20 @@ def _load_ohlc_to_dataframe_filtered(
         df = df.reset_index()
     elif re.match(hourly_freq_pattern, input_freq) and output_freq == "1d":
         # Resample hourly to daily
-        df = _resample_ohlc_hour_to_day(df)
+        df_daily = _resample_ohlc_hour_to_day(df).reset_index()
+        # Drop incomplete day
+        last_day_hour = df.index.max().hour
+        drop_last_day = last_day_hour < 23
+        print(
+            f"UTC Max: {df.index.max()}, Resampled Max: {df_daily[DATETIME_COL].max()},"
+            f" Dropping Last Day: {drop_last_day}"
+        )
+        if drop_last_day:
+            df_daily = df_daily.loc[
+                df_daily[DATETIME_COL] < df_daily[DATETIME_COL].max()
+            ]
         # Fill in days with no transactions
-        df = df.reset_index()
-        df = fill_missing_ohlc(df)
+        df = fill_missing_ohlc(df_daily)
     else:
         raise ValueError(
             f"Unsupported data frequency pair! input_freq={input_freq},"

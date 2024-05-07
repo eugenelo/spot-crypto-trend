@@ -56,7 +56,7 @@ def fetch_balance(exchange: ccxt.Exchange) -> Dict[str, BalanceEntry]:
     """
     # Balances to ignore when computing available cash value
     # Units are in currency
-    bal_to_ignore = {"BTC": 0.11440919, BASE_CURRENCY: 12000}
+    bal_to_ignore = {"BTC": 0.11440919 - 0.00065952, BASE_CURRENCY: 12000}
 
     # Fetch account balance
     balance = exchange.fetch_balance()["total"]

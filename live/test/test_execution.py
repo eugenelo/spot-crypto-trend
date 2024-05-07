@@ -229,6 +229,7 @@ class TestExecution(unittest.TestCase):
         self.assertFalse(market_buy["postOnly"])
         self.assertEqual("GTD", market_buy["timeinforce"])
         self.assertEqual(f"+{MARKET_ORDER_TIMEOUT_TIME}", market_buy["expiretm"])
+        self.assertEqual(abs(amount), market_buy["amount"])
 
         exchange.fill_order(market_buy["id"])
 
@@ -247,6 +248,7 @@ class TestExecution(unittest.TestCase):
         self.assertFalse(market_sell["postOnly"])
         self.assertEqual("GTD", market_sell["timeinforce"])
         self.assertEqual(f"+{MARKET_ORDER_TIMEOUT_TIME}", market_sell["expiretm"])
+        self.assertEqual(abs(amount), market_sell["amount"])
 
         exchange.fill_order(market_sell["id"])
 
@@ -267,6 +269,7 @@ class TestExecution(unittest.TestCase):
         self.assertTrue(limit_buy["postOnly"])
         self.assertEqual("GTD", limit_buy["timeinforce"])
         self.assertEqual(f"+{LIMIT_ORDER_TIMEOUT_TIME}", limit_buy["expiretm"])
+        self.assertEqual(abs(amount), limit_buy["amount"])
 
         exchange.fill_order(limit_buy["id"])
 
@@ -285,6 +288,7 @@ class TestExecution(unittest.TestCase):
         self.assertTrue(limit_sell["postOnly"])
         self.assertEqual("GTD", limit_sell["timeinforce"])
         self.assertEqual(f"+{LIMIT_ORDER_TIMEOUT_TIME}", limit_sell["expiretm"])
+        self.assertEqual(abs(amount), limit_sell["amount"])
 
         # Can't place order with existing open order
         with self.assertRaises(AssertionError):

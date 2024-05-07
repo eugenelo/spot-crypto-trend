@@ -1,3 +1,4 @@
+from datetime import timedelta
 from functools import partial
 from typing import Callable, Optional
 
@@ -13,9 +14,13 @@ from position_generation.constants import (
     DM_COL,
     FDM_30D_EMA_COL,
     FDM_COL,
+    HISTORY_COL,
     IDM_30D_EMA_COL,
     IDM_COL,
+    INSUFFICIENT_HISTORY_COL,
+    LONG_HORIZON_NUM_DAYS,
     MAX_ABS_POSITION_SIZE_COL,
+    MIN_HISTORY_NUM_DAYS,
     NUM_KEPT_ASSETS_COL,
     NUM_LONG_ASSETS_COL,
     NUM_OPEN_LONG_POSITIONS_COL,
@@ -101,6 +106,10 @@ def generate_positions(
     df = scale_signal_avg_to_1(
         df, signal=SCALED_SIGNAL_COL, periods_per_day=periods_per_day
     )
+
+    # Invalidate tickers with insufficient history
+    df = create_insufficient_history_mask(df, min_history_days=MIN_HISTORY_NUM_DAYS)
+    df.loc[df[INSUFFICIENT_HISTORY_COL], SCALED_SIGNAL_COL] = np.nan
 
     # Don't take positions in assets where we can't estimate volatility
     df.loc[df[VOL_FORECAST_COL].isna(), SCALED_SIGNAL_COL] = np.nan
@@ -326,7 +335,7 @@ def scale_signal_avg_to_1(
 ) -> pd.DataFrame:
     abs_signal_avg_col = ABS_SIGNAL_AVG_COL.format(signal=signal)
     df[abs_signal_avg_col] = cross_sectional_abs_ema(
-        df, column=signal, days=180, periods_per_day=periods_per_day
+        df, column=signal, days=LONG_HORIZON_NUM_DAYS, periods_per_day=periods_per_day
     )
     df[signal] /= df[abs_signal_avg_col]
     return df
@@ -346,4 +355,14 @@ def cap_position_size(
         -df[MAX_ABS_POSITION_SIZE_COL],
         df[MAX_ABS_POSITION_SIZE_COL],
     )
+    return df
+
+
+def create_insufficient_history_mask(
+    df: pd.DataFrame, min_history_days: int
+) -> pd.DataFrame:
+    df[HISTORY_COL] = df[TICKER_COL].map(
+        df.groupby(TICKER_COL)[DATETIME_COL].agg(np.ptp)
+    )
+    df[INSUFFICIENT_HISTORY_COL] = df[HISTORY_COL] < timedelta(days=min_history_days)
     return df

@@ -23,6 +23,7 @@ from live.constants import (
     FEES_COL,
     ID_COL,
     LEDGER_DIRECTION_COL,
+    PNL_DATA_FETCH_START_DATE,
 )
 from live.utils import (
     KrakenExchange,
@@ -37,8 +38,12 @@ from live.utils import (
 def parse_args():
     parser = argparse.ArgumentParser(description="Print/plot strategy PNL")
     parser.add_argument("--skip_plots", action="store_true")
-    parser.add_argument("--input_path", "-i", type=str, help="Input data file path")
-    parser.add_argument("--data_freq", "-f", type=str, help="Input data frequency")
+    parser.add_argument(
+        "--input_path", "-i", type=str, help="Input data file path", required=True
+    )
+    parser.add_argument(
+        "--data_freq", "-f", type=str, help="Input data frequency", required=True
+    )
     parser.add_argument(
         "--start_date",
         "-s",
@@ -52,12 +57,17 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_current_pnl(kraken: ccxt.kraken, start_date: datetime, verbose: bool) -> float:
-    # Compute starting bankroll from deposits
-    df_deposits = get_historical_deposits(kraken=kraken, start_date=start_date)
-    starting_bankroll = df_deposits.loc[df_deposits[CURRENCY_COL] == BASE_CURRENCY][
-        AMOUNT_COL
-    ].sum()
+def get_current_pnl(
+    kraken: ccxt.kraken, start_date: datetime, df_ohlc: pd.DataFrame, verbose: bool
+) -> float:
+    # Compute starting bankroll from account size on start date
+    account_size = get_historical_account_size(
+        kraken,
+        start_date=start_date,
+        df_ohlc=df_ohlc,
+    )
+    print(f"Account Size: {account_size}")
+    starting_bankroll = account_size.iloc[0]
     assert np.isfinite(starting_bankroll) and starting_bankroll > 0.0
     # Compute PNL
     balance = fetch_balance(kraken)
@@ -142,22 +152,24 @@ def get_historical_account_size(
     df_ohlc: pd.DataFrame,
 ) -> pd.Series:
     # Fetch all historical trades
-    df_trades = get_historical_trades(kraken=kraken, start_date=start_date)
+    df_trades = get_historical_trades(
+        kraken=kraken, start_date=PNL_DATA_FETCH_START_DATE
+    )
 
     # Get historical deposits
-    df_deposits = get_historical_deposits(kraken=kraken, start_date=start_date)
+    df_deposits = get_historical_deposits(
+        kraken=kraken, start_date=PNL_DATA_FETCH_START_DATE
+    )
 
     # Set start date to first deposit date at the earliest
     min_deposit_date = df_deposits[DATETIME_COL].min()
-    if start_date < min_deposit_date:
-        start_date = min_deposit_date
 
     # Reconstruct daily positions from trade ledger &
     # daily account size from positions + daily prices
     DT_1DAY = timedelta(days=1)
-    start_date = datetime.combine(start_date, datetime_time())
-    end_date = datetime.combine(datetime.now(tz=pytz.UTC), datetime_time())
-    idx = pd.date_range(start_date, end_date, freq="1D", tz=pytz.UTC)
+    idx_start_date = datetime.combine(min_deposit_date, datetime_time())
+    idx_end_date = datetime.combine(datetime.now(tz=pytz.UTC), datetime_time())
+    idx = pd.date_range(idx_start_date, idx_end_date, freq="1D", tz=pytz.UTC)
     account_size = pd.Series(index=idx)
     # `positions` maps from Ticker -> Amount (units in asset, NOT base currency)
     positions = {BASE_CURRENCY: 0}
@@ -185,7 +197,7 @@ def get_historical_account_size(
             (df_ohlc[DATETIME_COL] >= date) & (df_ohlc[DATETIME_COL] < date + DT_1DAY)
         ]
         if df_prices.empty:
-            assert i == len(idx) - 1, i
+            assert i == len(idx) - 1, date
             break
 
         account_size.iloc[i] = portfolio_value(positions=positions, df_prices=df_prices)
@@ -193,14 +205,16 @@ def get_historical_account_size(
     if np.isnan(account_size.iloc[-1]):
         # Populate last day's account size with current prices
         account_size.iloc[-1] = get_account_size(fetch_balance(kraken))
-    return account_size
+    return account_size.loc[account_size.index >= start_date]
 
 
 def get_historical_pnl(
     kraken: ccxt.kraken, start_date: datetime, account_size: pd.Series
 ) -> pd.Series:
     # Get historical deposits
-    df_deposits = get_historical_deposits(kraken=kraken, start_date=start_date)
+    df_deposits = get_historical_deposits(
+        kraken=kraken, start_date=PNL_DATA_FETCH_START_DATE
+    )
     base_currency_deposits = df_deposits.loc[df_deposits[CURRENCY_COL] == BASE_CURRENCY]
 
     # When computing log returns, account for deposits which occurred on that day
@@ -242,21 +256,16 @@ def main(args):
     start_date = pytz.UTC.localize(
         datetime.strptime(args.start_date.replace("/", "-"), "%Y-%m-%d")
     )
+    df_ohlc = load_ohlc_to_daily_filtered(
+        args.input_path,
+        input_freq=args.data_freq,
+        tz=pytz.UTC,
+        whitelist_fn=None,
+    )
 
     if args.skip_plots:
-        get_current_pnl(kraken, start_date=start_date, verbose=True)
+        get_current_pnl(kraken, start_date=start_date, df_ohlc=df_ohlc, verbose=True)
     else:
-        if args.input_path is None or args.data_freq is None:
-            raise ValueError(
-                "Input path to price data and data frequency must be specified for"
-                " plotting historical PNL"
-            )
-        df_ohlc = load_ohlc_to_daily_filtered(
-            args.input_path,
-            input_freq=args.data_freq,
-            tz=pytz.UTC,
-            whitelist_fn=None,
-        )
         # Plot account size over time
         account_size = get_historical_account_size(
             kraken,

@@ -1,3 +1,7 @@
+from datetime import datetime
+
+import pytz
+
 from data.constants import (
     DATETIME_COL,
     ORDER_SIDE_COL,
@@ -60,11 +64,13 @@ LEDGER_COLUMNS = [
     FEE_COL,
 ]
 
-
+# Trade Execution
 MAX_ACCEPTABLE_SLIPPAGE = 0.005
 MAX_SINGLE_TRADE_SIZE = 500  # [BASE_CURRENCY]
 MARKET_ORDER_TIMEOUT_TIME = 10  # [seconds]
 LIMIT_ORDER_TIMEOUT_TIME = 3600  # [seconds]
 TRADE_EXECUTION_PAUSE_INTERVAL = 1  # [seconds]
+UPDATE_TRADES_INTERVAL = 0  # [seconds]
 
-UPDATE_TRADES_INTERVAL = 300  # [seconds]
+# Pnl
+PNL_DATA_FETCH_START_DATE = datetime(2024, 1, 1, tzinfo=pytz.UTC)

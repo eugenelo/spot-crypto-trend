@@ -208,18 +208,17 @@ def _place_order(
         order_book=order_book, side=limit_order_book_side(order_side=order_side)
     )
     execution_price = avg_market_price if order_type == "market" else limit_order_price
-    dollar_volume = amount * execution_price
+    abs_amount = abs(amount)
+    dollar_volume = abs_amount * execution_price
     # fmt: off
     bid = get_best_price(order_book, side="bids")
     ask = get_best_price(order_book, side="asks")
     mid = get_mid_price(order_book)
     print(
         f"Ticker: {ticker}\n"
-        f"\t slippage: {slippage:.4f}, order_type: {order_type}, execution_price: ${execution_price:.6f}\n"  # noqa: B950
-        f"\t best_market_price: ${best_market_price:.6f}, avg_market_price: ${avg_market_price:.6f}\n"  # noqa: B950
-        f"\t order_side: {order_side}, limit_order_price: ${limit_order_price:.6f}\n"  # noqa: B950
-        f"\t bid: ${bid:.6f}, ask: ${ask:.6f}, mid: ${mid:.6f}\n"  # noqa: B950
-        f"\t amount: {amount:.4f}, dollar_volume: ${dollar_volume:.4f}"  # noqa: B950
+        f"\t order_type: {order_type}, {order_side} {abs_amount:.4f}@{execution_price:.6f} (dollar_volume: ${dollar_volume:.4f})\n"  # noqa: B950
+        f"\t best_market_price: ${best_market_price:.6f}, avg_market_price: ${avg_market_price:.6f}, slippage: {slippage:.4f}\n"  # noqa: B950
+        f"\t bid: ${bid:.6f}, ask: ${ask:.6f}, mid: ${mid:.6f}, limit_order_price: ${limit_order_price:.6f}\n"  # noqa: B950
     )
     # fmt: on
 
@@ -242,7 +241,7 @@ def _place_order(
             symbol=ticker,
             type=order_type,
             side=order_side,
-            amount=amount,
+            amount=abs_amount,
             price=execution_price,
             params={
                 "postOnly": order_type == "limit",  # Cannot be true for market orders

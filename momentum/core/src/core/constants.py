@@ -16,14 +16,67 @@ POSITION_COL = "scaled_position"
 
 def in_universe_excl_stablecoins(pair: str) -> bool:
     # Exclude stable coins & other untradable coins
-    UNLISTED_TICKERS = ["PEPE"]  # Can't trade on Kraken pro for some reason
-    GEOLOCKED_TICKERS = ["BONK", "JASMY", "REQ", "LMWR"]  # Can't trade from the US
+    GEOLOCKED_TICKERS = [
+        "ACA",
+        "AGLD",
+        "ALICE",
+        "ASTR",
+        "ATLAS",
+        "AUDIO",
+        "BONK",
+        "C98",
+        "CFG",
+        "CSM",
+        "GLMR",
+        "HDX",
+        "INTR",
+        "JASMY",
+        "KIN",
+        "LMWR",
+        "LUNC",
+        "MC",
+        "MV",
+        "NMR",
+        "NODL",
+        "NYM",
+        "ORCA",
+        "OXY",
+        "PARA",
+        "PEPE",
+        "PERP",
+        "PLA",
+        "POL",
+        "PSTAKE",
+        "PYTH",
+        "RAY",
+        "REQ",
+        "ROOK",
+        "SAMO",
+        "SDN",
+        "STEP",
+        "SUI",
+        "TEER",
+        "TRIBE",
+        "USTC",
+        "WIF",
+        "WOO",
+        "XRT",
+        "YGG",
+    ]  # Can't trade from the US
     WRAPPED_TOKENS = ["WBTC", "WETH"]  # Duplicate with their non-wrapped counterparts
-    STABLECOIN_TICKERS = ["DAI", "USDT", "EURT", "TUSD", "USDC", "PYUSD"]
+    STABLECOIN_TICKERS = [
+        "DAI",
+        "USDT",
+        "EURT",
+        "TUSD",
+        "USDC",
+        "PYUSD",
+        "EUR",
+        "GBP",
+        "AUD",
+    ]
 
-    tickers_outside_universe = (
-        UNLISTED_TICKERS + GEOLOCKED_TICKERS + WRAPPED_TOKENS + STABLECOIN_TICKERS
-    )
+    tickers_outside_universe = GEOLOCKED_TICKERS + WRAPPED_TOKENS + STABLECOIN_TICKERS
     if any([pair.startswith(ticker) for ticker in tickers_outside_universe]):
         return False
     return True

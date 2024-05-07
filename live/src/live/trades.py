@@ -14,7 +14,11 @@ import pytz
 import yaml
 from ccxt.base.types import Order
 
-from core.constants import POSITION_COL, in_universe_excl_stablecoins
+from core.constants import (
+    AVG_DOLLAR_VOLUME_COL,
+    POSITION_COL,
+    in_universe_excl_stablecoins,
+)
 from core.utils import get_periods_per_day
 from data.constants import DATETIME_COL, TICKER_COL
 from data.utils import load_ohlc_to_daily_filtered, load_ohlc_to_hourly_filtered
@@ -23,8 +27,6 @@ from live.constants import (
     CURRENT_DOLLAR_POSITION_COL,
     CURRENT_POSITION_COL,
     CURRENT_PRICE_COL,
-    LIMIT_ORDER_TIMEOUT_TIME,
-    MARKET_ORDER_TIMEOUT_TIME,
     POSITION_DELTA_COL,
     TARGET_DOLLAR_POSITION_COL,
     TRADE_AMOUNT_COL,
@@ -46,9 +48,12 @@ from live.utils import (
     fetch_bid_ask_spread,
     get_account_size,
 )
-from position_generation.constants import (
+from position_generation.constants import (  # noqa: F401
+    ABS_SIGNAL_AVG_COL,
     SCALED_SIGNAL_COL,
     VOL_FORECAST_COL,
+    VOL_LONG_COL,
+    VOL_SHORT_COL,
     VOL_TARGET_COL,
 )
 from position_generation.position_generation import get_generate_positions_fn
@@ -214,7 +219,6 @@ def place_orders(
 
 def handle_open_orders(kraken: ccxt.kraken, open_orders: List[Order]) -> List[str]:
     # Wait up to timeout for orders to be filled, then cancel and retry
-    unix_now = datetime.now(tz=pytz.UTC).timestamp()  # [seconds]
     tickers_traded: List[str] = []
     for order in open_orders:
         order_id = order["id"]
@@ -237,18 +241,10 @@ def handle_open_orders(kraken: ccxt.kraken, open_orders: List[Order]) -> List[st
         print("{id}: {side} {symbol} {amount}@{price} - {status}".format(**order))
         order_status = order["status"]
         if order_status == "open":
-            # Expiration check (market and limit)
-            order_type = order["type"]
-            timeout = (
-                LIMIT_ORDER_TIMEOUT_TIME
-                if order_type == "limit"
-                else MARKET_ORDER_TIMEOUT_TIME
-            )  # [seconds]
-            unix_order = order["timestamp"] / 1000  # [seconds]
-            order_expired = abs(unix_now - unix_order) > timeout
             # Price staleness check (limit only)
             price_stale = False
             ticker = order["symbol"]
+            order_type = order["type"]
             if order_type == "limit":
                 order_side = order["side"]
                 order_price = order["price"]
@@ -269,11 +265,11 @@ def handle_open_orders(kraken: ccxt.kraken, open_orders: List[Order]) -> List[st
                     f" {market_price:.6f}, order_side: {order_side}, price_stale:"
                     f" {price_stale}"
                 )
-            if order_expired or price_stale:
+            if price_stale:
                 # Cancel order
                 print(
                     f"Canceling order {order_id} for {ticker}:"
-                    f" order_expired={order_expired}, price_stale={price_stale}"
+                    f" price_stale={price_stale}"
                 )
                 response = kraken.cancel_order(id=order_id)
                 print(f"Canceled {int(response['result']['count'])} order(s)")
@@ -308,64 +304,94 @@ def execute_trades(
         tickers = df_trades[TICKER_COL].unique()
         last_time_updated_trades = datetime.now(tz=pytz.UTC)
 
+    # Display trades to be executed and ask for user confirmation
     update_trades()
-
-    tickers_traded = []
+    display_trades(df_trades)
     while True:
-        # Update trades to do with current market prices
-        now = datetime.now(tz=pytz.UTC)
-        if (now - last_time_updated_trades).seconds > UPDATE_TRADES_INTERVAL:
-            print("Updating trades")
-            update_trades()
-            # For sell orders, can't sell more than we own
-            balance = fetch_balance(kraken)
-            for ticker in tickers:
-                if ticker in balance:
-                    curr_amount = balance[ticker].amount
-                else:
-                    curr_amount = 0
-                df_trades.loc[df_trades[TICKER_COL] == ticker, TRADE_AMOUNT_COL].clip(
-                    lower=-curr_amount, inplace=True
-                )
-
-        # Get tickers to trade this iteration based on the following criteria:
-        #   1. Ticker has not already been traded since this function started
-        #   2. Ticker does not have an outstanding open order
-        open_orders = kraken.fetch_open_orders()
-        tickers_with_open_orders = [order["symbol"] for order in open_orders]
-        df_trades_subset = df_trades.loc[
-            (~df_trades[TICKER_COL].isin(tickers_traded))
-            & (~df_trades[TICKER_COL].isin(tickers_with_open_orders))
-            & (df_trades[TICKER_COL] != BASE_CURRENCY)
-        ]
-        if df_trades_subset.empty and len(tickers_with_open_orders) == 0:
+        proceed = input("Proceed with trades? [Y/N]:")
+        if proceed.lower() not in ["y", "n"]:
+            print("Input must be one of ['Y', 'y', 'N', 'n']")
+            continue
+        elif proceed.lower() == "n":
+            print("Aborting trade execution!")
+            return
+        else:
+            print()
             break
 
-        print("\nNew Iter")
-        print(f"Tickers Traded: {tickers_traded}")
-        print(f"Open Orders: {tickers_with_open_orders}")
+    reupdate_trades = False
+    tickers_traded = []
+    open_order_ids = []
+    while True:
+        try:
+            # Fetch open orders before updating trades to avoid data race
+            # because updating trades takes a very long time
+            open_orders = kraken.fetch_open_orders()
 
-        # Place new orders
-        if not df_trades_subset.empty:
-            print("Remaining:")
-            display_trades(df_trades_subset)
-            print("Executing orders")
-            new_orders = place_orders(
-                kraken=kraken,
-                df_trades=df_trades_subset,
-                execution_strategy=execution_strategy,
-                validate=validate,
+            # Update trades to do with current market prices
+            now = datetime.now(tz=pytz.UTC)
+            reupdate_trades |= (
+                last_time_updated_trades is None
+                or (now - last_time_updated_trades).seconds > UPDATE_TRADES_INTERVAL
             )
-            print(f"{len(new_orders)} orders placed, pausing")
-            open_orders.extend(new_orders)
+            if reupdate_trades:
+                print("Updating trades")
+                update_trades()
+                # For sell orders, can't sell more than we own
+                balance = fetch_balance(kraken)
+                for ticker in tickers:
+                    if ticker in balance:
+                        curr_amount = balance[ticker].amount
+                    else:
+                        curr_amount = 0
+                    df_trades.loc[
+                        df_trades[TICKER_COL] == ticker, TRADE_AMOUNT_COL
+                    ].clip(lower=-curr_amount, inplace=True)
 
-        # Handle open orders
-        print("Checking status of open orders")
-        tickers_traded_this_iter = handle_open_orders(
-            kraken=kraken, open_orders=open_orders
-        )
-        tickers_traded.extend(tickers_traded_this_iter)
-        time.sleep(TRADE_EXECUTION_PAUSE_INTERVAL)
+            # Get tickers to trade this iteration based on the following criteria:
+            #   1. Ticker has not already been traded since this function started
+            #   2. Ticker does not have an outstanding open order
+            tickers_with_open_orders = [order["symbol"] for order in open_orders]
+            df_trades_subset = df_trades.loc[
+                (~df_trades[TICKER_COL].isin(tickers_traded))
+                & (~df_trades[TICKER_COL].isin(tickers_with_open_orders))
+                & (df_trades[TICKER_COL] != BASE_CURRENCY)
+            ]
+            if df_trades_subset.empty and len(tickers_with_open_orders) == 0:
+                break
+            # Reupdate cash balances if open orders have changed
+            new_open_order_ids = sorted([order["id"] for order in open_orders])
+            reupdate_trades = open_order_ids != new_open_order_ids
+            open_order_ids = new_open_order_ids
+
+            print("\nNew Iter")
+            print(f"Tickers Traded: {tickers_traded}")
+            print(f"Open Orders: {tickers_with_open_orders}")
+
+            # Place new orders
+            if not df_trades_subset.empty:
+                print("Remaining:")
+                display_trades(df_trades_subset)
+                print("Executing orders")
+                new_orders = place_orders(
+                    kraken=kraken,
+                    df_trades=df_trades_subset,
+                    execution_strategy=execution_strategy,
+                    validate=validate,
+                )
+                print(f"{len(new_orders)} orders placed, pausing")
+                open_orders.extend(new_orders)
+
+            # Handle open orders
+            print("Checking status of open orders")
+            tickers_traded_this_iter = handle_open_orders(
+                kraken=kraken, open_orders=open_orders
+            )
+            tickers_traded.extend(tickers_traded_this_iter)
+            time.sleep(TRADE_EXECUTION_PAUSE_INTERVAL)
+        except Exception as e:
+            print(f"Caught exception: {e}")
+            print("Retrying!!")
 
 
 def cancel_all_orders(kraken: ccxt.kraken) -> None:
@@ -383,11 +409,23 @@ def display_trades(df_trades: pd.DataFrame) -> None:
     cols_of_interest = [
         DATETIME_COL,
         TICKER_COL,
-        VOL_FORECAST_COL,
-        VOL_TARGET_COL,
+        AVG_DOLLAR_VOLUME_COL,
+        # VOL_FORECAST_COL,
+        # VOL_TARGET_COL,
         SCALED_SIGNAL_COL,
         POSITION_COL,
     ] + TRADE_COLUMNS
+    # cols_of_interest = [
+    #     DATETIME_COL,
+    #     TICKER_COL,
+    #     VOL_SHORT_COL,
+    #     VOL_LONG_COL,
+    #     VOL_FORECAST_COL,
+    #     VOL_TARGET_COL,
+    #     "rohrbach_exponential",
+    #     ABS_SIGNAL_AVG_COL.format(signal=SCALED_SIGNAL_COL),
+    #     SCALED_SIGNAL_COL,
+    # ]
 
     # Add row containing column totals for printing only
     df_tmp = df_trades.copy().sort_values(by=TRADE_DOLLAR_COL, ascending=False)
@@ -399,6 +437,7 @@ def output_trades(df_trades: pd.DataFrame, output_path: Path) -> None:
     cols_of_interest = [
         DATETIME_COL,
         TICKER_COL,
+        AVG_DOLLAR_VOLUME_COL,
         VOL_FORECAST_COL,
         VOL_TARGET_COL,
         SCALED_SIGNAL_COL,
@@ -417,6 +456,15 @@ def output_trades(df_trades: pd.DataFrame, output_path: Path) -> None:
     print(f"Wrote {df_trades[cols_of_interest].shape} dataframe to '{output_path}'")
 
 
+def display_balance(df_balance: pd.DataFrame) -> None:
+    # Add row containing column totals for printing only
+    df_tmp = df_balance.copy().sort_values(
+        by=CURRENT_DOLLAR_POSITION_COL, ascending=False
+    )
+    df_tmp.loc["total"] = df_tmp.sum(numeric_only=True, axis=0)
+    print(f"Balance:\n{df_tmp}")
+
+
 def main(args):
     # Initialize the Kraken exchange
     with open(args.credentials_path, "r") as yaml_file:
@@ -433,10 +481,23 @@ def main(args):
         cancel_all_orders(kraken)
         return 0
 
+    # Set timezone
+    if args.timezone == "latest":
+        # Choose timezone which throws away the least amount of data
+        # (assumes data was recently updated)
+        curr_utc_hour = datetime.now(tz=pytz.UTC).hour
+        if curr_utc_hour > 12:
+            timezone_str = f"Etc/GMT-{24-curr_utc_hour}"
+        else:
+            timezone_str = f"Etc/GMT+{curr_utc_hour}"
+        tz = pytz.timezone(timezone_str)
+    else:
+        tz = pytz.timezone(args.timezone)
+    print(f"Timezone: {tz}")
+
     whitelist_fn = in_universe_excl_stablecoins
     # Load data from input file
     print(f"Loading OHLC data from {args.input_path}")
-    tz = pytz.timezone(args.timezone)
     if args.output_data_freq == "1d":
         df_ohlc = load_ohlc_to_daily_filtered(
             args.input_path,
@@ -495,7 +556,7 @@ def main(args):
     elif args.mode == "execute":
         # Check date
         yesterday = datetime.combine(
-            datetime.now(tz=pytz.UTC), datetime_time()
+            datetime.now(tz=tz), datetime_time()
         ).date() - timedelta(days=1)
         last_positions_date = df_positions[DATETIME_COL].max().date()
         assert (
@@ -515,7 +576,7 @@ def main(args):
         df_balance = balance_to_dataframe(balance).sort_values(
             by=CURRENT_DOLLAR_POSITION_COL, ascending=False
         )
-        print(f"Balance:\n{df_balance}")
+        display_balance(df_balance)
         df_trades = get_trades(
             kraken,
             df_positions=df_positions,
@@ -528,8 +589,8 @@ def main(args):
 
 
 if __name__ == "__main__":
-    np.set_printoptions(linewidth=1000)
-    pd.set_option("display.width", 2000)
+    np.set_printoptions(linewidth=4000)
+    pd.set_option("display.width", 4000)
     pd.set_option("display.precision", 4)
     pd.set_option(
         "display.float_format",

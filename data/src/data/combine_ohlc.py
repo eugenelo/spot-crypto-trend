@@ -97,9 +97,10 @@ def process_fileset(
         ).floor(freq=data_frequency)
         df_ohlc = df_ohlc.loc[df_ohlc[DATETIME_COL] <= last_complete_timestamp]
 
-    # Reset index
+    # Reset index and reorder columns
     df_ohlc.sort_values(by=[DATETIME_COL, TICKER_COL], ascending=True, inplace=True)
     df_ohlc.index = pd.RangeIndex(len(df_ohlc.index))
+    df_ohlc = df_ohlc[OHLC_COLUMNS]
 
     if output_path is None:
         # Print data
