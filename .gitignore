@@ -39,7 +39,7 @@ eclipse-*bin/
 # User-specific .bazelrc
 user.bazelrc
 # Module
-MODULE*
+MODULE.bazel.lock
 # Ignore venv
 .venv/
 # Ignore tmp stuff

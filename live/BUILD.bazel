@@ -1,0 +1,123 @@
+load("@pip_deps//:requirements.bzl", "requirement")
+load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_library", "py_test")
+load("@aspect_bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
+load("@rules_oci//oci:defs.bzl", "oci_tarball", "oci_push")
+load("//:py_layer.bzl", "py_oci_image")
+
+py_library(
+    name = "live",
+    srcs = [
+        "src/live/constants.py",
+        "src/live/utils.py",
+        "src/live/execution.py",
+    ],
+    imports = ["src"],
+    deps = [
+        requirement("ccxt"),
+        "//data:data",
+        "//ccxt_custom:ccxt_custom",
+    ],
+    visibility = ["//visibility:public"]
+)
+
+py_binary(
+    name="trades",
+    srcs=[
+        "src/live/trades.py"
+    ],
+    main="trades.py",
+    deps = [
+        requirement("ccxt"),
+        requirement("pytz"),
+        "//momentum/position_generation:position_generation",
+        "//momentum/signal_generation:signal_generation",
+        "//momentum/simulation:simulation",
+        "//momentum/core:core",
+        "//data:data",
+        ":live",
+    ],
+)
+
+py_binary(
+    name="pnl",
+    srcs=[
+        "src/live/pnl.py"
+    ],
+    main="pnl.py",
+    deps = [
+        requirement("ccxt"),
+        requirement("pytz"),
+        "//momentum/position_generation:position_generation",
+        "//momentum/signal_generation:signal_generation",
+        "//momentum/simulation:simulation",
+        "//momentum/core:core",
+        "//data:data",
+        ":live",
+    ],
+)
+
+
+py_test(
+    name="test_execution",
+    srcs = ["test/test_execution.py"],
+    deps = [
+        requirement("ccxt"),
+        requirement("numpy"),
+        requirement("pytz"),
+        ":live",
+    ],
+    size="medium",
+)
+
+
+#  Construct an image that has three layers.
+#  The result will look like this:
+#     bazel run //live:tarball
+#
+# 2f2353bd5bea: Loading layer [==================================================>]  47.13MB/47.13MB
+# f02532d45017: Loading layer [==================================================>]   3.62MB/3.62MB
+# 9296e9071c11: Loading layer [==================================================>]  16.24kB/16.24kB
+py_oci_image(
+    name = "image",
+    base = "@ubuntu",
+    binary = "trades",
+    entrypoint = ["/live/trades"],
+)
+platform(
+    name = "aarch64_linux",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+platform(
+    name = "x86_64_linux",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+platform_transition_filegroup(
+    name = "platform_image",
+    srcs = [":image"],
+    target_platform = select({
+        "@platforms//cpu:arm64": ":aarch64_linux",
+        "@platforms//cpu:x86_64": ":x86_64_linux",
+    }),
+)
+#  $ bazel run //live:tarball
+#  $ docker run --rm genelo33/elo-private:live-trades
+oci_tarball(
+    name = "tarball",
+    format = "docker",
+    image = ":platform_image",
+    repo_tags = ["genelo33/elo-private:live-trades"],
+)
+
+#  $ bazel run //live:publish
+oci_push(
+    name = "publish",
+    image = ":platform_image",
+    repository = "genelo33/elo-private",
+    remote_tags = ["live-trades"],
+)

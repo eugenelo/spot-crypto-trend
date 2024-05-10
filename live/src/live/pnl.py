@@ -192,6 +192,12 @@ def get_historical_account_size(
             for row in df_trades_for_date.itertuples():
                 update_positions_with_trade(positions=positions, trade=row)
 
+        # Sanity check no negative positions
+        amount_EPS = 1e-3
+        for ticker, amount in positions.items():
+            if ticker != BASE_CURRENCY:
+                assert amount >= -amount_EPS, (date, ticker, amount)
+
         # Get prices on date
         df_prices = df_ohlc.loc[
             (df_ohlc[DATETIME_COL] >= date) & (df_ohlc[DATETIME_COL] < date + DT_1DAY)

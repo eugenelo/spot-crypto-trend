@@ -294,6 +294,7 @@ def execute_trades(
 
     def update_trades():
         nonlocal df_trades, tickers, last_time_updated_trades
+        t0 = time.time()
         df_trades = get_trades(
             kraken,
             df_positions=df_positions,
@@ -303,12 +304,14 @@ def execute_trades(
         assert not df_trades.duplicated(subset=[TICKER_COL], keep=False).any()
         tickers = df_trades[TICKER_COL].unique()
         last_time_updated_trades = datetime.now(tz=pytz.UTC)
+        t1 = time.time()
+        print(f"Updated trades in {t1-t0:.2f} seconds")
 
     # Display trades to be executed and ask for user confirmation
     update_trades()
     display_trades(df_trades)
     while True:
-        proceed = input("Proceed with trades? [Y/N]:")
+        proceed = input("Proceed with trades? [y/n]:")
         if proceed.lower() not in ["y", "n"]:
             print("Input must be one of ['Y', 'y', 'N', 'n']")
             continue
@@ -497,7 +500,7 @@ def main(args):
 
     whitelist_fn = in_universe_excl_stablecoins
     # Load data from input file
-    print(f"Loading OHLC data from {args.input_path}")
+    t0 = time.time()
     if args.output_data_freq == "1d":
         df_ohlc = load_ohlc_to_daily_filtered(
             args.input_path,
@@ -514,6 +517,8 @@ def main(args):
         )
     else:
         raise ValueError("Unsupported output data frequency!")
+    t1 = time.time()
+    print(f"Loaded OHLC data from '{args.input_path}' in {t1-t0:.2f} seconds")
 
     # Load position generation params
     params = {}

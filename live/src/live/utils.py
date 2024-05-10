@@ -148,6 +148,8 @@ def fetch_my_trades(kraken: KrakenExchange, start_date: datetime) -> pd.DataFram
         columns={"symbol": TICKER_COL},
     ).sort_values(by=TIMESTAMP_COL, ascending=True)
     df_trades[DATETIME_COL] = pd.to_datetime(df_trades[DATETIME_COL], utc=True)
+    # Filter duplicate trade entries (based on ID)
+    df_trades.drop_duplicates(subset=[ID_COL], inplace=True)
     # Filter trades which occurred before start date
     return df_trades.loc[df_trades[DATETIME_COL] > start_date][HISTORICAL_TRADE_COLUMNS]
 
@@ -176,7 +178,9 @@ def fetch_deposits(kraken: KrakenExchange, start_date: datetime) -> pd.DataFrame
         columns={"symbol": TICKER_COL},
     ).sort_values(by=TIMESTAMP_COL, ascending=True)
     df_tx[DATETIME_COL] = pd.to_datetime(df_tx[DATETIME_COL], utc=True)
-    # Filter trades which occurred before start date
+    # Filter duplicate ledger entries (based on ID)
+    df_tx.drop_duplicates(subset=[ID_COL], inplace=True)
+    # Filter entries which occurred before start date
     return df_tx.loc[df_tx[DATETIME_COL] > start_date][LEDGER_COLUMNS]
 
 

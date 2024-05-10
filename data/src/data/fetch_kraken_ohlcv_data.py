@@ -1,4 +1,5 @@
 import argparse
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -131,6 +132,7 @@ def main(args):
     if args.output_path is not None:
         # Write to output path
         if args.append_output:
+            t0 = time.time()
             # Load existing output file to filter duplicates and reindex
             if args.data_frequency == "1d":
                 df_existing_output = load_ohlc_to_daily_filtered(
@@ -147,6 +149,11 @@ def main(args):
                     whitelist_fn=None,
                 )
             assert df_ohlcv.columns.equals(df_existing_output.columns)
+            t1 = time.time()
+            print(
+                f"Loaded existing dataframe at '{args.output_path}' in"
+                f" {t1-t0:.2f} seconds"
+            )
             df_ohlcv = pd.concat([df_existing_output, df_ohlcv])
             df_ohlcv.drop_duplicates(
                 subset=[DATETIME_COL, TICKER_COL],
@@ -157,10 +164,17 @@ def main(args):
                 by=[DATETIME_COL, TICKER_COL], ascending=True, inplace=True
             )
             df_ohlcv.index = pd.RangeIndex(len(df_ohlcv.index))
+            t2 = time.time()
+            print(f"Appended existing and new dataframes in {t2-t1:.2f} seconds")
+        t0 = time.time()
         output_path = Path(args.output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df_ohlcv.to_csv(str(output_path), mode="w", index=False)
-        print(f"Wrote {df_ohlcv.shape} dataframe to '{output_path}'")
+        t1 = time.time()
+        print(
+            f"Wrote {df_ohlcv.shape} dataframe to '{output_path}' in"
+            f" {t1-t0:.2f} seconds"
+        )
     else:
         print(df_ohlcv)
 

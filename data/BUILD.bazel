@@ -1,4 +1,8 @@
 load("@pip_deps//:requirements.bzl", "requirement")
+load("@aspect_rules_py//py:defs.bzl", "py_binary", "py_library", "py_test")
+load("@aspect_bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
+load("@rules_oci//oci:defs.bzl", "oci_tarball", "oci_push")
+load("//:py_layer.bzl", "py_oci_image")
 
 py_library(
     name = "data",
@@ -8,10 +12,11 @@ py_library(
     ],
     imports = ["src"],
     deps = [
+        requirement("ccxt"),
+        requirement("numpy"),
         requirement("pandas"),
         requirement("pytz"),
         requirement("polars"),
-        requirement("ccxt"),
     ],
     visibility = ["//visibility:public"]
 )
@@ -98,7 +103,62 @@ py_test(
     name="test_utils",
     srcs = ["test/test_utils.py"],
     deps = [
+        requirement("numpy"),
+        requirement("pandas"),
         ":data",
     ],
     size="small",
+)
+
+
+#  Construct an image that has three layers.
+#  The result will look like this:
+#     bazel run //data:tarball
+#
+# 2f2353bd5bea: Loading layer [==================================================>]  47.13MB/47.13MB
+# f02532d45017: Loading layer [==================================================>]   3.62MB/3.62MB
+# 9296e9071c11: Loading layer [==================================================>]  16.24kB/16.24kB
+py_oci_image(
+    name = "image",
+    base = "@ubuntu",
+    binary = "fetch_kraken_ohlcv_data",
+    entrypoint = ["/data/fetch_kraken_ohlcv_data"],
+)
+platform(
+    name = "aarch64_linux",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+platform(
+    name = "x86_64_linux",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+platform_transition_filegroup(
+    name = "platform_image",
+    srcs = [":image"],
+    target_platform = select({
+        "@platforms//cpu:arm64": ":aarch64_linux",
+        "@platforms//cpu:x86_64": ":x86_64_linux",
+    }),
+)
+#  $ bazel run //data:tarball
+#  $ docker run --rm genelo33/elo-private:fetch-ohlcv
+oci_tarball(
+    name = "tarball",
+    format = "docker",
+    image = ":platform_image",
+    repo_tags = ["genelo33/elo-private:fetch-ohlcv"],
+)
+
+#  $ bazel run //data:publish
+oci_push(
+    name = "publish",
+    image = ":platform_image",
+    repository = "genelo33/elo-private",
+    remote_tags = ["fetch-ohlcv"],
 )

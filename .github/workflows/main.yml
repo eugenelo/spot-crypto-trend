@@ -8,8 +8,9 @@ on:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
+      # Install TA-Lib
       - run: |
           wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
           tar xvfz ta-lib-0.4.0-src.tar.gz
@@ -18,11 +19,31 @@ jobs:
           make
           sudo make install
 
-      - uses: actions/checkout@v2
-      - uses: bazelbuild/setup-bazelisk@v2
+      # Checkout Repo
+      - name: Checkout
+        uses: actions/checkout@v4.1.5
+
+      # Set python version
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Build code
       - run: bazel build //...
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
+
+      # Test code
       - run: bazel test -- //... -//third_party/...
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
+
+      # Upload test logs
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4.3.3
+        with:
+          name: test-logs
+          path: ~/.cache/bazel/_bazel_runner/**/execroot/_main/bazel-out/k8-fastbuild/testlogs/**/**/**/test.log
+          retention-days: 5
+          overwrite: True
