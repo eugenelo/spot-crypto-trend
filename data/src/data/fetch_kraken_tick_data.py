@@ -1,4 +1,5 @@
 import argparse
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -34,6 +35,7 @@ from data.utils import (
     interpolate_missing_ids,
     valid_tick_df_pandas,
 )
+from logging_custom.utils import setup_logging
 
 
 def parse_args():
@@ -140,13 +142,19 @@ def fetch_tick_data(
                 trades = kraken.fetch_trades(symbol, since=since_ns)
                 fetched_trades = True
             except ccxt.NetworkError as e:
-                print(f"{symbol} failed due to a network error: {str(e)}. Retrying!")
+                logger.warning(
+                    f"{symbol} failed due to a network error: {str(e)}. Retrying!"
+                )
                 continue
             except ccxt.ExchangeError as e:
-                print(f"{symbol} failed due to exchange error: {str(e)}. Skipping!")
+                logger.warning(
+                    f"{symbol} failed due to exchange error: {str(e)}. Skipping!"
+                )
                 break
             except Exception as e:
-                print(f"{symbol} failed with unexpected error: {str(e)}. Skipping!")
+                logger.warning(
+                    f"{symbol} failed with unexpected error: {str(e)}. Skipping!"
+                )
                 break
             else:
                 break
@@ -180,8 +188,8 @@ def fetch_tick_data(
         except IndexError:
             # Occasionally, the nanosecond field will be missing. Take from the seconds
             # field instead and decrement by eps to avoid missing trades.
-            print(
-                "WARNING: Couldn't get 'last'! Setting to timestamp from latest trade."
+            logger.warning(
+                "Couldn't get 'last' field! Setting to timestamp from latest trade."
             )
             since_ns = int(tick_data[TIMESTAMP_COL][-1] * 1e9) - EPS_NS
 
@@ -221,7 +229,7 @@ def main(args):
         symbols = get_unified_symbols(kraken, tickers=[args.ticker])
     else:
         symbols = get_usd_symbols(kraken)
-    print(f"{len(symbols)} valid USD pairs")
+    logger.info(f"{len(symbols)} valid USD pairs")
 
     num_input_methods = (
         int(args.lookback_days is not None)
@@ -264,7 +272,7 @@ def main(args):
                 output_dir=args.output_dir, symbol=symbol
             )
             since = float(since_ns) * 1e-9
-        print(
+        logger.info(
             f"Fetching data for {symbol} from"
             f" {datetime.fromtimestamp(since, tz=pytz.UTC)} to"
             f" {datetime.fromtimestamp(end, tz=pytz.UTC)}"
@@ -292,7 +300,7 @@ def main(args):
                     break
                 # Check for skipped trades
                 if last_trade_id < df_tick[ID_COL].min() - 1:
-                    print(
+                    logger.error(
                         f"Skipped trades for {symbol}! since_ns={query_ns},"
                         f" last_trade_id={last_trade_id},"
                         f" new_min_trade_id={df_tick[ID_COL].min()}"
@@ -312,7 +320,7 @@ def main(args):
 
             min_date = datetime.fromtimestamp(df_tick[TIMESTAMP_COL].min(), tz=pytz.UTC)
             max_date = datetime.fromtimestamp(df_tick[TIMESTAMP_COL].max(), tz=pytz.UTC)
-            print(
+            logger.info(
                 f"Fetched {len(df_tick)} trades from {min_date} to {max_date} in"
                 f" {t1-t0:.2f} seconds"
             )
@@ -327,7 +335,7 @@ def main(args):
                     # Interpolation failed
                     pass
                 if df_tick[ID_COL].isna().any():
-                    print(
+                    logger.error(
                         "Failed to correct trade_ids of 0. Try fetching the data again"
                         f" with a larger '--chunk_size'\n\t- symbol={symbol},"
                         f" since_ns={query_ns}, end_ns={end_ns},"
@@ -390,20 +398,20 @@ def main(args):
                         df_write.drop_duplicates(subset=[ID_COL], inplace=True)
                     output_path.parent.mkdir(parents=True, exist_ok=True)
                     df_write.to_csv(output_path, index=False)
-                    print(f"Wrote {df_write.shape} dataframe to '{output_path}'")
+                    logger.info(f"Wrote {df_write.shape} dataframe to '{output_path}'")
 
                     write_start += dt
                     write_end += dt
             else:
-                print(df_tick)
+                logger.info(f"\n{df_tick}")
 
             query_ns = last_ns
             last_trade_id = df_tick[ID_COL].max()
 
     if len(failed_jobs) > 0:
-        print("Failed Jobs:")
+        logger.warning("Failed Jobs:")
         for failed_job in failed_jobs:
-            print(f"\t- {failed_job}")
+            logger.warning(f"\t- {failed_job}")
         return 1
     return 0
 
@@ -413,6 +421,13 @@ if __name__ == "__main__":
     pd.set_option("display.width", 2000)
     pd.set_option("display.precision", 3)
     pd.set_option("display.float_format", "{:.3f}".format)
+
+    # Configure logging
+    log_config_path = Path(__file__).parent / Path(
+        "../../../logging_custom/logging_config/data_config.yaml"
+    )
+    setup_logging(config_path=log_config_path)
+    logger = logging.getLogger(__name__)
 
     args = parse_args()
     exit(main(args))

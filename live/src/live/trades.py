@@ -1,4 +1,5 @@
 import argparse
+import logging
 import time
 from datetime import datetime
 from datetime import time as datetime_time
@@ -48,6 +49,7 @@ from live.utils import (
     fetch_bid_ask_spread,
     get_account_size,
 )
+from logging_custom.utils import setup_logging
 from position_generation.constants import (  # noqa: F401
     ABS_SIGNAL_AVG_COL,
     SCALED_SIGNAL_COL,
@@ -130,8 +132,8 @@ def get_trades(
     # Translate positions to dollar amounts
     curr_cash_value = get_account_size(balance)
     account_size = min(account_size, curr_cash_value)
-    print(f"Current Cash Value: ${curr_cash_value:.2f}")
-    print(f"Account Size: ${account_size:.2f}")
+    logger.info(f"Current Cash Value: ${curr_cash_value:.2f}")
+    logger.info(f"Account Size: ${account_size:.2f}")
     df_trades[TARGET_DOLLAR_POSITION_COL] = df_trades[POSITION_COL] * account_size
 
     # Unroll balance into dataframe
@@ -209,7 +211,7 @@ def place_orders(
             if order is not None:
                 orders_placed.append(order)
         except Exception as e:
-            print(
+            logger.warning(
                 f"Placing order for {ticker} failed with unexpected error:"
                 f" {str(e)}. Skipping!"
             )
@@ -226,19 +228,19 @@ def handle_open_orders(kraken: ccxt.kraken, open_orders: List[Order]) -> List[st
             try:
                 order = kraken.fetch_order(id=order_id)
             except ccxt.NetworkError as e:
-                print(
+                logger.warning(
                     f"Fetching order {order_id} failed due to a network error:"
                     f" {str(e)}. Retrying!"
                 )
                 continue
             except Exception as e:
-                print(
+                logger.warning(
                     f"Fetching order {order_id} failed with unexpected error: {str(e)}."
                 )
                 break
             else:
                 break
-        print("{id}: {side} {symbol} {amount}@{price} - {status}".format(**order))
+        logger.info("{id}: {side} {symbol} {amount}@{price} - {status}".format(**order))
         order_status = order["status"]
         if order_status == "open":
             # Price staleness check (limit only)
@@ -260,25 +262,25 @@ def handle_open_orders(kraken: ccxt.kraken, open_orders: List[Order]) -> List[st
                     market_price=market_price,
                     order_side=order_side,
                 )
-                print(
+                logger.info(
                     f"\t order_price: ${order_price:.6f}, market_price:"
                     f" {market_price:.6f}, order_side: {order_side}, price_stale:"
                     f" {price_stale}"
                 )
             if price_stale:
                 # Cancel order
-                print(
+                logger.info(
                     f"Canceling order {order_id} for {ticker}:"
                     f" price_stale={price_stale}"
                 )
                 response = kraken.cancel_order(id=order_id)
-                print(f"Canceled {int(response['result']['count'])} order(s)")
+                logger.info(f"Canceled {int(response['result']['count'])} order(s)")
         elif order_status == "closed":
             # Order has been filled
             tickers_traded.append(order["symbol"])
         else:
             # Order failed
-            print(f"Order {order_id} failed with status {order_status}")
+            logger.warning(f"Order {order_id} failed with status {order_status}")
     return tickers_traded
 
 
@@ -305,7 +307,7 @@ def execute_trades(
         tickers = df_trades[TICKER_COL].unique()
         last_time_updated_trades = datetime.now(tz=pytz.UTC)
         t1 = time.time()
-        print(f"Updated trades in {t1-t0:.2f} seconds")
+        logger.info(f"Updated trades in {t1-t0:.2f} seconds")
 
     # Display trades to be executed and ask for user confirmation
     update_trades()
@@ -338,7 +340,7 @@ def execute_trades(
                 or (now - last_time_updated_trades).seconds > UPDATE_TRADES_INTERVAL
             )
             if reupdate_trades:
-                print("Updating trades")
+                logger.info("Updating trades")
                 update_trades()
                 # For sell orders, can't sell more than we own
                 balance = fetch_balance(kraken)
@@ -367,45 +369,44 @@ def execute_trades(
             reupdate_trades = open_order_ids != new_open_order_ids
             open_order_ids = new_open_order_ids
 
-            print("\nNew Iter")
-            print(f"Tickers Traded: {tickers_traded}")
-            print(f"Open Orders: {tickers_with_open_orders}")
+            logger.info("\nNew Iter")
+            logger.info(f"Tickers Traded: {tickers_traded}")
+            logger.info(f"Open Orders: {tickers_with_open_orders}")
 
             # Place new orders
             if not df_trades_subset.empty:
-                print("Remaining:")
+                logger.info("Remaining:")
                 display_trades(df_trades_subset)
-                print("Executing orders")
+                logger.info("Executing orders")
                 new_orders = place_orders(
                     kraken=kraken,
                     df_trades=df_trades_subset,
                     execution_strategy=execution_strategy,
                     validate=validate,
                 )
-                print(f"{len(new_orders)} orders placed, pausing")
+                logger.info(f"{len(new_orders)} orders placed, pausing")
                 open_orders.extend(new_orders)
 
             # Handle open orders
-            print("Checking status of open orders")
+            logger.info("Checking status of open orders")
             tickers_traded_this_iter = handle_open_orders(
                 kraken=kraken, open_orders=open_orders
             )
             tickers_traded.extend(tickers_traded_this_iter)
             time.sleep(TRADE_EXECUTION_PAUSE_INTERVAL)
         except Exception as e:
-            print(f"Caught exception: {e}")
-            print("Retrying!!")
+            logger.warning(f"Caught exception: {e}. Retrying!")
 
 
 def cancel_all_orders(kraken: ccxt.kraken) -> None:
     open_orders = kraken.fetch_open_orders()
     num_open_orders = len(open_orders)
-    print(f"Canceling {num_open_orders} orders")
+    logger.info(f"Canceling {num_open_orders} orders")
 
     while num_open_orders > 0:
         response = kraken.cancel_all_orders()
         num_open_orders -= int(response["result"]["count"])
-        print(f"Remaining num_open_orders={num_open_orders}")
+        logger.info(f"Remaining num_open_orders={num_open_orders}")
 
 
 def display_trades(df_trades: pd.DataFrame) -> None:
@@ -433,7 +434,7 @@ def display_trades(df_trades: pd.DataFrame) -> None:
     # Add row containing column totals for printing only
     df_tmp = df_trades.copy().sort_values(by=TRADE_DOLLAR_COL, ascending=False)
     df_tmp.loc["total"] = df_tmp.sum(numeric_only=True, axis=0)
-    print(df_tmp[cols_of_interest])
+    logger.info(f"\n{df_tmp[cols_of_interest]}")
 
 
 def output_trades(df_trades: pd.DataFrame, output_path: Path) -> None:
@@ -456,7 +457,9 @@ def output_trades(df_trades: pd.DataFrame, output_path: Path) -> None:
         header=True,
         index=False,
     )
-    print(f"Wrote {df_trades[cols_of_interest].shape} dataframe to '{output_path}'")
+    logger.info(
+        f"Wrote {df_trades[cols_of_interest].shape} dataframe to '{output_path}'"
+    )
 
 
 def display_balance(df_balance: pd.DataFrame) -> None:
@@ -465,7 +468,7 @@ def display_balance(df_balance: pd.DataFrame) -> None:
         by=CURRENT_DOLLAR_POSITION_COL, ascending=False
     )
     df_tmp.loc["total"] = df_tmp.sum(numeric_only=True, axis=0)
-    print(f"Balance:\n{df_tmp}")
+    logger.info(f"Balance:\n{df_tmp}")
 
 
 def main(args):
@@ -480,7 +483,7 @@ def main(args):
         }
     )
     if args.mode == "cancel_all":
-        print("Canceling all open orders!")
+        logger.info("Canceling all open orders!")
         cancel_all_orders(kraken)
         return 0
 
@@ -496,7 +499,7 @@ def main(args):
         tz = pytz.timezone(timezone_str)
     else:
         tz = pytz.timezone(args.timezone)
-    print(f"Timezone: {tz}")
+    logger.info(f"Timezone: {tz}")
 
     whitelist_fn = in_universe_excl_stablecoins
     # Load data from input file
@@ -518,16 +521,16 @@ def main(args):
     else:
         raise ValueError("Unsupported output data frequency!")
     t1 = time.time()
-    print(f"Loaded OHLC data from '{args.input_path}' in {t1-t0:.2f} seconds")
+    logger.info(f"Loaded OHLC data from '{args.input_path}' in {t1-t0:.2f} seconds")
 
     # Load position generation params
     params = {}
     with open(args.params_path, "r") as yaml_file:
         params = yaml.safe_load(yaml_file)
-    print(f"Loaded params: {params}")
+    logger.info(f"Loaded params: {params}")
     assert "signal" in params, "Signal should be specified in params!"
     rebalancing_buffer = params.get("rebalancing_buffer", DEFAULT_REBALANCING_BUFFER)
-    print(f"rebalancing_buffer: {rebalancing_buffer:.4g}")
+    logger.info(f"rebalancing_buffer: {rebalancing_buffer:.4g}")
 
     # Generate positions. Don't lag (not backtesting, take current day positions
     # to harvest next day returns).
@@ -601,6 +604,13 @@ if __name__ == "__main__":
         "display.float_format",
         partial(np.format_float_positional, precision=4, trim="0"),
     )
+
+    # Configure logging
+    log_config_path = Path(__file__).parent / Path(
+        "../../../logging_custom/logging_config/live_config.yaml"
+    )
+    setup_logging(config_path=log_config_path)
+    logger = logging.getLogger(__name__)
 
     args = parse_args()
     exit(main(args))

@@ -1,0 +1,43 @@
+version: 1
+disable_existing_loggers: false
+formatters:
+  default:
+    format: '[%(levelname)s|%(module)s|L%(lineno)d] %(asctime)s: %(message)s'
+    datefmt: '%Y-%m-%dT%H:%M:%S%z'
+  json:
+    (): logging_custom.logging_custom.MyJSONFormatter
+    fmt_keys:
+      level: levelname
+      message: message
+      timestamp: timestamp
+      logger: name
+      module: module
+      function: funcName
+      line: lineno
+      thread_name: threadName
+handlers:
+  # All handler names must preceed 'queue_listener' due to some python jank
+  # reference: https://stackoverflow.com/questions/75241185/why-does-python-logging-throw-an-error-when-a-handler-name-starts-with-s
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: default
+    stream: ext://sys.stdout
+  file_json:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: json
+    filename: /tmp/logs/momentum_main.log.jsonl
+    maxBytes: 3000000
+    backupCount: 3
+  queue_listener:
+    (): logging_custom.logging_custom.QueueListenerHandler
+    handlers:
+    - cfg://handlers.console
+    - cfg://handlers.file_json
+    respect_handler_level: true
+loggers:
+  root:
+    level: INFO
+    handlers:
+    - queue_listener

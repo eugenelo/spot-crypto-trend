@@ -1,3 +1,4 @@
+import logging
 from typing import Callable, List, Optional
 
 import pandas as pd
@@ -16,7 +17,7 @@ from position_generation.constants import (
 from simulation.constants import DEFAULT_REBALANCING_BUFFER, DEFAULT_VOLUME_MAX_SIZE
 from simulation.fees import FeeType, compute_fees
 from simulation.stats import (
-    display_stats,
+    aggregate_stats,
     get_trade_volume,
     get_turnover,
     plot_cumulative_returns,
@@ -24,6 +25,8 @@ from simulation.stats import (
 )
 from simulation.utils import get_segment_mask
 from simulation.vbt import get_log_returns, get_returns, simulate, vbt
+
+logger = logging.getLogger(__name__)
 
 
 def backtest(
@@ -117,9 +120,9 @@ def backtest(
     )
     # fmt: on
     if verbose:
-        print("--- Before Fees ---")
-        print(portfolio_no_fees.stats())
-        print()
+        logger.info("--- Before Fees ---")
+        logger.info(portfolio_no_fees.stats())
+        logger.info("\n")
     if not with_fees:
         return portfolio_no_fees
 
@@ -179,11 +182,11 @@ def backtest(
     )
 
     if verbose:
-        print("--- After Fees ---")
-        print(portfolio_with_fees.stats())
+        logger.info("--- After Fees ---")
+        logger.info(portfolio_with_fees.stats())
         portfolio_with_fees.plot_drawdowns().show()
         portfolio_with_fees.plot_net_exposure().show()
-        print()
+        logger.info("\n")
 
         # Plot returns
         df_returns = get_returns(portfolio_with_fees).reset_index()
@@ -316,7 +319,8 @@ def backtest_crypto(
     # Compare returns, stats
     pf_names = ["Benchmark", "pf_Strategy"]
     portfolios = [pf_benchmark, pf_portfolio]
-    display_stats(portfolios, pf_names)
+    df_stats = aggregate_stats(portfolios, pf_names)
+    logger.info(f"\n{df_stats}")
     if not skip_plots:
         plot_cumulative_returns(portfolios, pf_names)
         plot_rolling_returns(portfolios, pf_names, window=30)

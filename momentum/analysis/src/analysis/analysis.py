@@ -1,8 +1,12 @@
+import logging
+
 import pandas as pd
 import plotly.express as px
 from scipy import stats
 
 from data.constants import TICKER_COL  # noqa: F401
+
+logger = logging.getLogger(__name__)
 
 
 def analysis(
@@ -17,11 +21,11 @@ def analysis(
     slope, intercept, r_value, p_value, std_err = stats.linregress(
         df_analysis[feature], df_analysis[target]
     )
-    print(f"slope: {slope}")
-    print(f"intercept: {intercept}")
-    print(f"r_value: {r_value}")
-    print(f"p_value: {p_value}")
-    print(f"std_err: {std_err}")
+    logger.info(f"slope: {slope}")
+    logger.info(f"intercept: {intercept}")
+    logger.info(f"r_value: {r_value}")
+    logger.info(f"p_value: {p_value}")
+    logger.info(f"std_err: {std_err}")
 
     # Look at correlation between momentum signals and next week returns
     fig = px.scatter(

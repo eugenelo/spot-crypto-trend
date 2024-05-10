@@ -1,0 +1,25 @@
+load("@aspect_rules_py//py:defs.bzl", "py_library")
+load("@pip_deps//:requirements.bzl", "requirement")
+
+py_library(
+    name = "logging_custom",
+    srcs = [
+        "src/logging_custom/logging_custom.py",
+        "src/logging_custom/utils.py",
+    ],
+    imports = ["src"],
+    deps = [
+        requirement("PyYAML"),
+    ],
+    visibility = ["//visibility:public"]
+)
+
+filegroup(
+    name = "config",
+    srcs = [
+        "logging_config/momentum_config.yaml",
+        "logging_config/data_config.yaml",
+        "logging_config/live_config.yaml",
+    ],
+    visibility = ["//visibility:public"]
+)

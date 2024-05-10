@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 import ccxt
@@ -11,6 +12,8 @@ from live.constants import (
     MAX_SINGLE_TRADE_SIZE,
 )
 from live.utils import fetch_order_book
+
+logger = logging.getLogger(__name__)
 
 
 def get_best_price(order_book: OrderBook, side: str) -> float:
@@ -214,7 +217,7 @@ def _place_order(
     bid = get_best_price(order_book, side="bids")
     ask = get_best_price(order_book, side="asks")
     mid = get_mid_price(order_book)
-    print(
+    logger.info(
         f"Ticker: {ticker}\n"
         f"\t order_type: {order_type}, {order_side} {abs_amount:.4f}@{execution_price:.6f} (dollar_volume: ${dollar_volume:.4f})\n"  # noqa: B950
         f"\t best_market_price: ${best_market_price:.6f}, avg_market_price: ${avg_market_price:.6f}, slippage: {slippage:.4f}\n"  # noqa: B950
@@ -224,7 +227,9 @@ def _place_order(
 
     # Sanity check
     if dollar_volume > MAX_SINGLE_TRADE_SIZE:
-        print("This trade exceeds the maximum allowed (dollar) size, skipping!!!")
+        logger.warning(
+            "This trade exceeds the maximum allowed (dollar) size, skipping!!!"
+        )
         return None
 
     if slippage < MAX_ACCEPTABLE_SLIPPAGE:
@@ -252,7 +257,9 @@ def _place_order(
         )
     else:
         # Try again later when more liquidity is available.
-        print(f"Slippage seems high ({slippage:.4f}), maybe try again later?")
+        logger.warning(
+            f"Slippage for {ticker} seems high ({slippage:.4f}), maybe try again later?"
+        )
         return None
 
 

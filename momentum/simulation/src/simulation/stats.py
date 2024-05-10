@@ -103,8 +103,10 @@ def get_trade_volume(pf_portfolio: vbt.Portfolio) -> pd.Series:
     return trade_volume
 
 
-def display_stats(portfolios: List[vbt.Portfolio], portfolio_names: List[str]):
-    # Display Stats for all portfolios
+def aggregate_stats(
+    portfolios: List[vbt.Portfolio], portfolio_names: List[str]
+) -> pd.DataFrame:
+    # Consolidate stats for all portfolios
     stats = []
     for i, pf in enumerate(portfolios):
         pf_stats = get_stats_of_interest(pf, portfolio_names[i])
@@ -130,7 +132,7 @@ def display_stats(portfolios: List[vbt.Portfolio], portfolio_names: List[str]):
         "Total Fees Paid [$]",
         "Avg. Fee per Trade [$]",
     ]
-    print(df_stats.reindex(column_order))
+    return df_stats.reindex(column_order)
 
 
 def plot_cumulative_returns(

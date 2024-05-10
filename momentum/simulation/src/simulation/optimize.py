@@ -1,4 +1,5 @@
 import datetime
+import logging
 from dataclasses import dataclass
 from functools import reduce
 from itertools import product
@@ -14,6 +15,8 @@ from position_generation.utils import Direction
 from simulation.backtest import backtest
 from simulation.stats import get_stats_of_interest, plot_cumulative_returns
 from simulation.vbt import get_annualized_volatility, vbt
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -210,22 +213,20 @@ def optimize(
 
     comparison_metric = "Sharpe Ratio"
     top = 25
-    print(
-        df_stats.sort_values(by=[comparison_metric], ascending=[False])[
-            [
-                "Sharpe Ratio",
-                "Total Fees Paid [$]",
-                "Total Trades",
-                "Total Return [%]",
-                "Max Drawdown [%]",
-                "Annualized Return [%]",
-                "Annualized Volatility [%]",
-                "Avg Daily Turnover [%]",
-                "Max Gross Exposure [%]",
-            ]
-        ].head(top)
-    )
-    print()
+    df_tmp = df_stats.sort_values(by=[comparison_metric], ascending=[False])[
+        [
+            "Sharpe Ratio",
+            "Total Fees Paid [$]",
+            "Total Trades",
+            "Total Return [%]",
+            "Max Drawdown [%]",
+            "Annualized Return [%]",
+            "Annualized Volatility [%]",
+            "Avg Daily Turnover [%]",
+            "Max Gross Exposure [%]",
+        ]
+    ].head(top)
+    logger.info(f"\n{df_tmp}\n")
 
     if not skip_plots:
         best_portfolios_idx = (

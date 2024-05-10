@@ -1,4 +1,5 @@
 import argparse
+import logging
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -26,6 +27,7 @@ from data.utils import (
     load_ohlc_to_daily_filtered,
     load_ohlc_to_hourly_filtered,
 )
+from logging_custom.utils import setup_logging
 
 
 def parse_args():
@@ -70,13 +72,19 @@ def fetch_ohlcv_data(
         try:
             ohlcv = kraken.fetch_ohlcv(symbol, timeframe=timeframe, since=since)
         except ccxt.NetworkError as e:
-            print(f"{symbol} failed due to a network error: {str(e)}. Retrying!")
+            logger.warning(
+                f"{symbol} failed due to a network error: {str(e)}. Retrying!"
+            )
             continue
         except ccxt.ExchangeError as e:
-            print(f"{symbol} failed due to exchange error: {str(e)}. Skipping!")
+            logger.warning(
+                f"{symbol} failed due to exchange error: {str(e)}. Skipping!"
+            )
             break
         except Exception as e:
-            print(f"{symbol} failed with unexpected error: {str(e)}. Skipping!")
+            logger.warning(
+                f"{symbol} failed with unexpected error: {str(e)}. Skipping!"
+            )
             break
         else:
             break
@@ -112,13 +120,13 @@ def main(args):
         symbols = get_unified_symbols(kraken, tickers=[args.ticker])
     else:
         symbols = get_usd_symbols(kraken)
-    print(f"{len(symbols)} valid USD pairs")
+    logger.info(f"{len(symbols)} valid USD pairs")
 
     # Fetch OHLC for each ticker, combine into a single DataFrame
     df_ohlcv = pd.DataFrame(columns=OHLC_COLUMNS)
     df_ohlcv[DATETIME_COL] = pd.to_datetime(df_ohlcv[DATETIME_COL], utc=True, unit="ms")
     for symbol in tqdm(symbols):
-        print(f"Fetching data for {symbol}")
+        logger.info(f"Fetching data for {symbol}")
         df_symbol = fetch_ohlcv_data(
             kraken,
             symbol=symbol,
@@ -150,7 +158,7 @@ def main(args):
                 )
             assert df_ohlcv.columns.equals(df_existing_output.columns)
             t1 = time.time()
-            print(
+            logger.info(
                 f"Loaded existing dataframe at '{args.output_path}' in"
                 f" {t1-t0:.2f} seconds"
             )
@@ -165,18 +173,18 @@ def main(args):
             )
             df_ohlcv.index = pd.RangeIndex(len(df_ohlcv.index))
             t2 = time.time()
-            print(f"Appended existing and new dataframes in {t2-t1:.2f} seconds")
+            logger.info(f"Appended existing and new dataframes in {t2-t1:.2f} seconds")
         t0 = time.time()
         output_path = Path(args.output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df_ohlcv.to_csv(str(output_path), mode="w", index=False)
         t1 = time.time()
-        print(
+        logger.info(
             f"Wrote {df_ohlcv.shape} dataframe to '{output_path}' in"
             f" {t1-t0:.2f} seconds"
         )
     else:
-        print(df_ohlcv)
+        logger.info(f"\n{df_ohlcv}")
 
     return 0
 
@@ -186,6 +194,13 @@ if __name__ == "__main__":
     pd.set_option("display.width", 2000)
     pd.set_option("display.precision", 3)
     pd.set_option("display.float_format", "{:.3f}".format)
+
+    # Configure logging
+    log_config_path = Path(__file__).parent / Path(
+        "../../../logging_custom/logging_config/data_config.yaml"
+    )
+    setup_logging(config_path=log_config_path)
+    logger = logging.getLogger(__name__)
 
     args = parse_args()
     exit(main(args))

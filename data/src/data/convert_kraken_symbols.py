@@ -1,4 +1,5 @@
 import argparse
+import logging
 from pathlib import Path
 
 import ccxt
@@ -8,6 +9,7 @@ import pandas as pd
 from ccxt_custom.kraken import KrakenExchange
 from data.constants import TICKER_COL
 from data.utils import load_ohlc_csv
+from logging_custom.utils import setup_logging
 
 
 def parse_args():
@@ -37,7 +39,7 @@ SYMBOL_SPECIAL_CASES = {
 
 
 def convert_tickers(kraken: ccxt.kraken, input_path: str, output_path: str):
-    print(f"Available Symbols: {kraken.symbols}")
+    logger.info(f"Available Symbols: {kraken.symbols}")
 
     df = load_ohlc_csv(input_path)
     tickers = df[TICKER_COL].unique()
@@ -49,16 +51,18 @@ def convert_tickers(kraken: ccxt.kraken, input_path: str, output_path: str):
                 market = kraken.markets_by_id[kraken_symbol][0]
                 ccxt_symbol = market["symbol"]
             except Exception:
-                print(f"Failed to find {kraken_symbol} on ccxt! Converting manually.")
+                logger.info(
+                    f"Failed to find {kraken_symbol} on ccxt! Converting manually."
+                )
                 kraken_symbol = kraken_symbol.replace("/", "")
                 ccxt_symbol = kraken_symbol[:-3] + "/" + kraken_symbol[-3:]
-        print(f"{kraken_symbol} -> {ccxt_symbol}")
+        logger.info(f"{kraken_symbol} -> {ccxt_symbol}")
         df.loc[df[TICKER_COL] == kraken_symbol, TICKER_COL] = ccxt_symbol
     # Write output
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(str(output_path), index=False)
-    print(f"Wrote output to '{output_path}'")
+    logger.info(f"Wrote output to '{output_path}'")
 
 
 def main(args):
@@ -80,6 +84,13 @@ if __name__ == "__main__":
     pd.set_option("display.width", 2000)
     pd.set_option("display.precision", 3)
     pd.set_option("display.float_format", "{:.3f}".format)
+
+    # Configure logging
+    log_config_path = Path(__file__).parent / Path(
+        "../../../logging_custom/logging_config/data_config.yaml"
+    )
+    setup_logging(config_path=log_config_path)
+    logger = logging.getLogger(__name__)
 
     args = parse_args()
     exit(main(args))

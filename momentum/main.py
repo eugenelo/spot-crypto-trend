@@ -1,4 +1,5 @@
 import argparse
+import logging
 from datetime import datetime
 from functools import partial
 from pathlib import Path
@@ -14,6 +15,7 @@ from core.utils import get_periods_per_day
 from data.constants import DATETIME_COL, TICKER_COL
 from data.utils import load_ohlc_to_daily_filtered  # noqa: F401
 from data.utils import load_ohlc_to_hourly_filtered  # noqa: F401
+from logging_custom.utils import setup_logging
 from position_generation.benchmark import get_generate_benchmark_fn
 from position_generation.constants import (
     SCALED_SIGNAL_COL,
@@ -74,6 +76,13 @@ if __name__ == "__main__":
     pd.set_option("display.width", 2000)
     pd.set_option("display.precision", 2)
 
+    # Configure logging
+    log_config_path = Path(__file__).parent / Path(
+        "../logging_custom/logging_config/momentum_config.yaml"
+    )
+    setup_logging(config_path=log_config_path)
+    logger = logging.getLogger(__name__)
+
     # Parse arguments
     args = parse_args()
     tz = pytz.timezone(args.timezone)
@@ -103,7 +112,7 @@ if __name__ == "__main__":
     if args.params_path is not None:
         with open(args.params_path, "r") as yaml_file:
             params = yaml.safe_load(yaml_file)
-        print(f"Loaded params: {params}")
+        logger.info(f"Loaded params: {params}")
     assert "signal" in params, "Signal should be specified in params!"
     # Lag positions if backtesting
     lag_positions = args.mode != "positions"
@@ -124,11 +133,13 @@ if __name__ == "__main__":
     # Validate dates
     data_start = df_analysis[DATETIME_COL].min()
     if start_date < data_start:
-        print(f"Input start_date is before start of data! Setting to {data_start}")
+        logger.info(
+            f"Input start_date is before start of data! Setting to {data_start}"
+        )
         start_date = data_start
     data_end = df_analysis[DATETIME_COL].max()
     if end_date > data_end:
-        print(f"Input end_date is after end of data! Setting to {data_end}")
+        logger.info(f"Input end_date is after end of data! Setting to {data_end}")
         end_date = data_end
 
     # Set input args
@@ -137,7 +148,7 @@ if __name__ == "__main__":
         if rebalancing_freq is None:
             rebalancing_freq = params["rebalancing_freq"]
         elif params["rebalancing_freq"] != rebalancing_freq:
-            print(
+            logger.warning(
                 f"Rebalancing freq conflict! Params={params['rebalancing_freq']},"
                 f" Input={rebalancing_freq}. Using input {rebalancing_freq}."
             )
@@ -146,15 +157,15 @@ if __name__ == "__main__":
             f"Rebalancing frequency {rebalancing_freq} is not supported! Use a fixed"
             " frequency instead (e.g. days)."
         )
-    print(f"Rebalancing Freq: {rebalancing_freq}")
+    logger.info(f"Rebalancing Freq: {rebalancing_freq}")
     volume_max_size = DEFAULT_VOLUME_MAX_SIZE
     if "volume_max_size" in params:
         volume_max_size = params["volume_max_size"]
-    print(f"volume_max_size: {volume_max_size}")
+    logger.info(f"volume_max_size: {volume_max_size}")
     rebalancing_buffer = DEFAULT_REBALANCING_BUFFER
     if "rebalancing_buffer" in params:
         rebalancing_buffer = params["rebalancing_buffer"]
-    print(f"rebalancing_buffer: {rebalancing_buffer}")
+    logger.info(f"rebalancing_buffer: {rebalancing_buffer}")
 
     if args.mode == "analysis":
         analysis(df_analysis)
@@ -215,12 +226,12 @@ if __name__ == "__main__":
             SCALED_SIGNAL_COL,
             POSITION_COL,
         ]
-        print(df_tmp[cols_of_interest])
+        logger.info(df_tmp[cols_of_interest])
         # Output to file
         if args.output_path is not None:
             output_path = Path(args.output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             df_positions[cols_of_interest].to_csv(str(output_path), index=False)
-            print(f"Wrote positions to '{output_path}'")
+            logger.info(f"Wrote positions to '{output_path}'")
     else:
         raise ValueError("Unsupported mode")

@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Optional
 
 import numpy as np
@@ -9,6 +10,8 @@ from vectorbt.portfolio import nb
 from vectorbt.portfolio.enums import Direction, NoOrder, SizeType
 
 from core.utils_nb import clip_nb
+
+logger = logging.getLogger(__name__)
 
 
 @njit
@@ -142,7 +145,7 @@ def simulate(
     leverage_mode: Optional[Any] = None,
 ) -> vbt.Portfolio:
     if leverage is not None:
-        print("Leverage is not supported by vectorbt, ignoring!")
+        logger.warning("Leverage is not supported by vectorbt, ignoring!")
 
     size_np = positions.to_numpy()
     volume_np = volume.to_numpy()

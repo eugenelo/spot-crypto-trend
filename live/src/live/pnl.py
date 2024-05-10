@@ -1,8 +1,10 @@
 import argparse
+import logging
 from datetime import datetime
 from datetime import time as datetime_time
 from datetime import timedelta
 from functools import partial
+from pathlib import Path
 from typing import Dict, NamedTuple
 
 import ccxt
@@ -33,6 +35,7 @@ from live.utils import (
     get_account_size,
     portfolio_value,
 )
+from logging_custom.utils import setup_logging
 
 
 def parse_args():
@@ -66,7 +69,7 @@ def get_current_pnl(
         start_date=start_date,
         df_ohlc=df_ohlc,
     )
-    print(f"Account Size: {account_size}")
+    logger.info(f"Account Size: {account_size}")
     starting_bankroll = account_size.iloc[0]
     assert np.isfinite(starting_bankroll) and starting_bankroll > 0.0
     # Compute PNL
@@ -76,7 +79,7 @@ def get_current_pnl(
             amount = balance_entry.amount
             market_price = balance_entry.mid_price
             cash_value = balance_entry.base_currency
-            print(
+            logger.info(
                 f"Ticker: {ticker}, Amount: {amount:.4f}, Market Price:"
                 f" ${market_price:.2f}, Cash Value: ${cash_value:.2f}"
             )
@@ -84,9 +87,9 @@ def get_current_pnl(
     curr_cash_value = get_account_size(balance)
     pnl = (curr_cash_value - starting_bankroll) / starting_bankroll
     if verbose:
-        print(f"Current Cash Value: ${(curr_cash_value):.2f}")
-        print(f"Starting Bankroll: ${starting_bankroll:.2f}")
-        print(f"PNL: {(pnl * 100):.2f}%")
+        logger.info(f"Current Cash Value: ${(curr_cash_value):.2f}")
+        logger.info(f"Starting Bankroll: ${starting_bankroll:.2f}")
+        logger.info(f"PNL: {(pnl * 100):.2f}%")
     return pnl
 
 
@@ -292,7 +295,7 @@ def main(args):
         fig.show()
         # Print realized volatility
         realized_volatility = np.sqrt(np.sum(pnl**2))
-        print(f"Realized Volatility: {100 * realized_volatility:.2f}%")
+        logger.info(f"Realized Volatility: {100 * realized_volatility:.2f}%")
 
     return 0
 
@@ -305,6 +308,13 @@ if __name__ == "__main__":
         "display.float_format",
         partial(np.format_float_positional, precision=4, trim="0"),
     )
+
+    # Configure logging
+    log_config_path = Path(__file__).parent / Path(
+        "../../../logging_custom/logging_config/live_config.yaml"
+    )
+    setup_logging(config_path=log_config_path)
+    logger = logging.getLogger(__name__)
 
     args = parse_args()
     exit(main(args))

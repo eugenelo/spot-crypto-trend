@@ -1,3 +1,4 @@
+import logging
 import re
 from typing import Callable, List, Optional
 
@@ -19,6 +20,8 @@ from data.constants import (
     VOLUME_COL,
     VWAP_COL,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def load_ohlc_to_daily_filtered(
@@ -61,7 +64,7 @@ def valid_ohlc_dataframe(df: pd.DataFrame, freq: str) -> bool:
     # Ensure that no duplicate rows exist for (ticker, timestamp) combination
     duplicate = df.duplicated(subset=[TICKER_COL, DATETIME_COL], keep=False)
     if duplicate.any():
-        print(f"Duplicate data: {df.loc[duplicate]}")
+        logger.error(f"Duplicate data: {df.loc[duplicate]}")
         return False
 
     # Ensure that no gaps exist between dates
@@ -73,7 +76,7 @@ def valid_ohlc_dataframe(df: pd.DataFrame, freq: str) -> bool:
         full_date_range = pd.date_range(start=start_date, end=end_date, freq=freq)
         missing_dates = full_date_range.difference(df_ticker[DATETIME_COL])
         if not missing_dates.empty:
-            print(f"Missing Dates: {ticker} - {missing_dates}")
+            logger.error(f"Missing Dates: {ticker} - {missing_dates}")
             return False
 
     # Ensure no NaNs
@@ -108,7 +111,7 @@ def _load_ohlc_to_dataframe_filtered(
             # Relocalize to input timezone
             df.index = df.index.tz_convert(tz)
         else:
-            print("Can't relocalize daily data! Ignoring input tz!")
+            logger.warning("Can't relocalize daily data! Ignoring input tz!")
 
     if input_freq == output_freq:
         # No resampling required
@@ -119,7 +122,7 @@ def _load_ohlc_to_dataframe_filtered(
         # Drop incomplete day
         last_day_hour = df.index.max().hour
         drop_last_day = last_day_hour < 23
-        print(
+        logger.info(
             f"UTC Max: {df.index.max()}, Resampled Max: {df_daily[DATETIME_COL].max()},"
             f" Dropping Last Day: {drop_last_day}"
         )
@@ -200,13 +203,13 @@ def valid_tick_df_pandas(df: pd.DataFrame, combined: bool) -> bool:
     # Missing elements in sequence
     missing_ids = missing_elements(df[ID_COL].to_list())
     if len(missing_ids) > 0:
-        print(f"Missing IDs: {missing_ids}")
+        logger.error(f"Missing IDs: {missing_ids}")
         return False
 
     # Duplicate IDs
     duplicate = df.duplicated(subset=[ID_COL], keep=False)
     if duplicate.any():
-        print(f"Duplicate data: \n{df.loc[duplicate]}")
+        logger.error(f"Duplicate data: \n{df.loc[duplicate]}")
         return False
 
     # Number of elements
@@ -215,7 +218,7 @@ def valid_tick_df_pandas(df: pd.DataFrame, combined: bool) -> bool:
         min_id = df[ID_COL].min()
         expected_min_id = MIN_ID.get(ticker, MIN_ID["DEFAULT"])
         if min_id != expected_min_id:
-            print(
+            logger.error(
                 f"Incorrect min_id, min_id ({min_id}) != expected ({expected_min_id})"
             )
             return False
@@ -224,7 +227,7 @@ def valid_tick_df_pandas(df: pd.DataFrame, combined: bool) -> bool:
         max_id = df[ID_COL].max()
         expected_num_rows = int(max_id - min_id + 1)
         if num_rows != expected_num_rows:
-            print(
+            logger.error(
                 f"Num Rows Mismatch: num_rows ({num_rows}) != expected"
                 f" ({expected_num_rows})"
             )
@@ -237,13 +240,13 @@ def valid_tick_df_polars(df: pl.DataFrame, combined: bool) -> bool:
     # Missing elements in sequence
     missing_ids = missing_elements(df[ID_COL].to_list())
     if len(missing_ids) > 0:
-        print(f"Missing IDs: {missing_ids}")
+        logger.error(f"Missing IDs: {missing_ids}")
         return False
 
     # Duplicate IDs
     duplicate = df.filter(pl.any_horizontal(pl.col(ID_COL).is_duplicated()))
     if not duplicate.is_empty():
-        print(f"Duplicate data: {duplicate}")
+        logger.error(f"Duplicate data: {duplicate}")
         return False
 
     # Number of elements
@@ -252,7 +255,7 @@ def valid_tick_df_polars(df: pl.DataFrame, combined: bool) -> bool:
         min_id = df.select(pl.min(ID_COL)).item()
         expected_min_id = MIN_ID.get(ticker, MIN_ID["DEFAULT"])
         if min_id != expected_min_id:
-            print(
+            logger.error(
                 f"Incorrect min_id, min_id ({min_id}) != expected ({expected_min_id})"
             )
             return False
@@ -261,7 +264,7 @@ def valid_tick_df_polars(df: pl.DataFrame, combined: bool) -> bool:
         max_id = df.select(pl.max(ID_COL)).item()
         expected_num_rows = int(max_id - min_id + 1)
         if num_rows != expected_num_rows:
-            print(
+            logger.error(
                 f"Num Rows Mismatch: num_rows ({num_rows}) != expected"
                 f" ({expected_num_rows})"
             )
@@ -309,10 +312,10 @@ def get_unified_symbols(exchange: ccxt.Exchange, tickers: List[str]) -> List[str
             ccxt_symbol = market["symbol"]
         except Exception:
             # TODO(@eugene.lo): This only works for $X/USD pairs
-            print(f"Failed to find {ticker} on ccxt! Converting manually.")
+            logger.info(f"Failed to find {ticker} on ccxt! Converting manually.")
             ticker = ticker.replace("/", "")
             ccxt_symbol = ticker[:-3] + "/" + ticker[-3:]
-        print(f"{ticker} -> {ccxt_symbol}")
+        logger.info(f"{ticker} -> {ccxt_symbol}")
         symbols.append(ccxt_symbol)
     return symbols
 

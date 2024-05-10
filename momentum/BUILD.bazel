@@ -5,6 +5,9 @@ py_binary(
     name="momentum",
     srcs=["main.py"],
     main="main.py",
+    data = [
+        "//logging_custom:config",
+    ],
     deps = [
         requirement("PyYAML"),
         "//momentum/analysis:analysis",
@@ -13,5 +16,6 @@ py_binary(
         "//momentum/signal_generation:signal_generation",
         "//momentum/simulation:simulation",
         "//data:data",
+        "//logging_custom:logging_custom",
     ],
 )

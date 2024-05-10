@@ -1,4 +1,5 @@
 import argparse
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
@@ -11,6 +12,7 @@ from tqdm.auto import tqdm
 
 from data.constants import ID_COL, TICK_COLUMNS, TICKER_COL, TIMESTAMP_COL
 from data.utils import valid_tick_df_pandas
+from logging_custom.utils import setup_logging
 
 
 def parse_args():
@@ -131,7 +133,7 @@ def process_fileset(input_paths: List[Path], output_dir: Path, write_cadence: st
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df_write.to_csv(output_path, index=False)
-        print(f"Wrote {df_write.shape} dataframe to '{output_path}'")
+        logger.info(f"Wrote {df_write.shape} dataframe to '{output_path}'")
 
         write_start += dt
         write_end += dt
@@ -174,6 +176,13 @@ if __name__ == "__main__":
     pd.set_option("display.width", 2000)
     pd.set_option("display.precision", 3)
     pd.set_option("display.float_format", "{:.3f}".format)
+
+    # Configure logging
+    log_config_path = Path(__file__).parent / Path(
+        "../../../logging_custom/logging_config/data_config.yaml"
+    )
+    setup_logging(config_path=log_config_path)
+    logger = logging.getLogger(__name__)
 
     args = parse_args()
     exit(main(args))

@@ -26,6 +26,9 @@ py_binary(
         "src/live/trades.py"
     ],
     main="trades.py",
+    data = [
+        "//logging_custom:config",
+    ],
     deps = [
         requirement("ccxt"),
         requirement("pytz"),
@@ -34,6 +37,7 @@ py_binary(
         "//momentum/simulation:simulation",
         "//momentum/core:core",
         "//data:data",
+        "//logging_custom:logging_custom",
         ":live",
     ],
 )
@@ -44,6 +48,9 @@ py_binary(
         "src/live/pnl.py"
     ],
     main="pnl.py",
+    data = [
+        "//logging_custom:config",
+    ],
     deps = [
         requirement("ccxt"),
         requirement("pytz"),
@@ -52,6 +59,7 @@ py_binary(
         "//momentum/simulation:simulation",
         "//momentum/core:core",
         "//data:data",
+        "//logging_custom:logging_custom",
         ":live",
     ],
 )

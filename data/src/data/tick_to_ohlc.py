@@ -1,4 +1,5 @@
 import argparse
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -30,6 +31,7 @@ from data.constants import (
     VWAP_COL,
 )
 from data.utils import valid_tick_df_polars
+from logging_custom.utils import setup_logging
 
 
 def parse_args():
@@ -256,12 +258,12 @@ def process_tick_df(
 
     if output_path is None:
         # Print data
-        print(ohlc)
+        logger.info(f"\n{ohlc}")
     else:
         # Output file
         output_path.parent.mkdir(parents=True, exist_ok=True)
         ohlc.write_csv(output_path)
-        print(
+        logger.info(
             f"Converted {df_tick.shape} dataframe into {args.timeframe} OHLC data at"
             f" {output_path}"
         )
@@ -290,7 +292,9 @@ def process_single_path(
     """
     # Check if output path already exists and overwrite is False
     if output_path is not None and output_path.exists() and not overwrite:
-        print(f"Output '{output_path}' already exists, skipping '{input_path}'")
+        logger.warning(
+            f"Output '{output_path}' already exists, skipping '{input_path}'"
+        )
         return
 
     # Convert tick data to DataFrame
@@ -328,7 +332,9 @@ def process_multiple_paths(
     """
     # Check if output path already exists and overwrite is False
     if output_path is not None and output_path.exists() and not overwrite:
-        print(f"Output '{output_path}' already exists, skipping '{input_paths}'")
+        logger.warning(
+            f"Output '{output_path}' already exists, skipping '{input_paths}'"
+        )
         return
 
     # Combine tick data from all paths into a single dataframe
@@ -410,7 +416,7 @@ def auto_update(input_dir: Path, output_dir: Path, timeframe: str) -> List[Faile
                 overwrite=overwrite,
             )
         except Exception as e:
-            print(e)
+            logger.error(f"Caught exception: {e}.")
             failed_jobs.append(
                 FailedJob(
                     input_path=input_path,
@@ -519,7 +525,7 @@ def main(args):
                             overwrite=args.overwrite,
                         )
                     except Exception as e:
-                        print(e)
+                        logger.error(f"Caught exception: {e}.")
                         failed_jobs.append(
                             FailedJob(
                                 input_path=input_path,
@@ -575,7 +581,7 @@ def main(args):
                                 overwrite=args.overwrite,
                             )
                         except Exception as e:
-                            print(e)
+                            logger.error(f"Caught exception: {e}.")
                             failed_jobs.append(
                                 FailedJob(
                                     input_path=None,
@@ -590,13 +596,20 @@ def main(args):
                             continue
 
     if len(failed_jobs) > 0:
-        print("Failed Jobs:")
+        logger.warning("Failed Jobs:")
         for failed_job in failed_jobs:
-            print(f"\t- {failed_job}")
+            logger.warning(f"\t- {failed_job}")
         return 1
     return 0
 
 
 if __name__ == "__main__":
+    # Configure logging
+    log_config_path = Path(__file__).parent / Path(
+        "../../../logging_custom/logging_config/data_config.yaml"
+    )
+    setup_logging(config_path=log_config_path)
+    logger = logging.getLogger(__name__)
+
     args = parse_args()
     exit(main(args))

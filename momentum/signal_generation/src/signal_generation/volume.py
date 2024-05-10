@@ -54,7 +54,6 @@ def create_volume_filter_mask(
             entry_threshold=max_daily_volume,
             exit_threshold=0.75 * max_daily_volume,
         )
-        print(df[VOLUME_BELOW_MAX_COL])
         df[VOLUME_BELOW_MAX_COL] = ~df[VOLUME_BELOW_MAX_COL]
 
     # Create filtered column (True --> row should be filtered out)

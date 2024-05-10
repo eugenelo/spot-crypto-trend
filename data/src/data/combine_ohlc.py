@@ -1,4 +1,5 @@
 import argparse
+import logging
 from collections import OrderedDict
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -10,6 +11,7 @@ from tqdm.auto import tqdm
 
 from data.constants import DATETIME_COL, OHLC_COLUMNS, TICKER_COL
 from data.utils import fill_missing_ohlc, valid_ohlc_dataframe
+from logging_custom.utils import setup_logging
 
 
 def parse_args():
@@ -59,7 +61,7 @@ def process_fileset(
     df_ohlc = pd.DataFrame(columns=OHLC_COLUMNS)
 
     for input_path in tqdm(input_paths):
-        print(f"Processing {input_path}")
+        logger.info(f"Processing {input_path}")
         with input_path.open() as fin:
             df_single = pd.read_csv(fin)
             df_ohlc = pd.concat([df_ohlc, df_single], ignore_index=True)
@@ -104,12 +106,12 @@ def process_fileset(
 
     if output_path is None:
         # Print data
-        print(df_ohlc)
+        logger.info(f"\n{df_ohlc}")
     else:
         # Output file
         output_path.parent.mkdir(parents=True, exist_ok=True)
         df_ohlc.to_csv(str(output_path), index=False)
-        print(f"Wrote {df_ohlc.shape} dataframe to '{output_path}'")
+        logger.info(f"Wrote {df_ohlc.shape} dataframe to '{output_path}'")
 
 
 def get_output_path(output_dir: Path, path_start: datetime, path_end: datetime) -> Path:
@@ -154,7 +156,7 @@ def main(args):
             # Only overwrite existing files with an end date within 7 days of today
             if output_path.exists():
                 if write_start_date > path_end:
-                    print(f"{output_path} already exists, skipping!")
+                    logger.info(f"{output_path} already exists, skipping!")
                     continue
             process_fileset(
                 input_paths=paths_list,
@@ -181,6 +183,12 @@ def main(args):
 
 
 if __name__ == "__main__":
-    # Parse arguments
+    # Configure logging
+    log_config_path = Path(__file__).parent / Path(
+        "../../../logging_custom/logging_config/data_config.yaml"
+    )
+    setup_logging(config_path=log_config_path)
+    logger = logging.getLogger(__name__)
+
     args = parse_args()
     exit(main(args))
