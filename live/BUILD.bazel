@@ -32,6 +32,7 @@ py_binary(
     deps = [
         requirement("ccxt"),
         requirement("pytz"),
+        requirement("google-cloud-logging"),
         "//momentum/position_generation:position_generation",
         "//momentum/signal_generation:signal_generation",
         "//momentum/simulation:simulation",

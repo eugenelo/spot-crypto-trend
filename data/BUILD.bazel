@@ -98,6 +98,7 @@ py_binary(
         "//logging_custom:config",
     ],
     deps = [
+        requirement("google-cloud-logging"),
         requirement("ccxt"),
         requirement("pytz"),
         requirement("tqdm"),

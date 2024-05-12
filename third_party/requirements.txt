@@ -21,3 +21,4 @@ TA-Lib==0.4.28
 vectorbtpro[base] @ git+https://${GH_TOKEN}@github.com/polakowo/vectorbt.pro.git@v2024.4.1
 static-frame==2.5.1
 tqdm==4.66.2
+google-cloud-logging

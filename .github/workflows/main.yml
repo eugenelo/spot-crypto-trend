@@ -39,8 +39,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
 
       # Upload test logs
-      - name: Upload logs
-        if: always()
+      - name: Upload test logs
+        if: failure()
         uses: actions/upload-artifact@v4.3.3
         with:
           name: test-logs

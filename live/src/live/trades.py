@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import time
 from datetime import datetime
 from datetime import time as datetime_time
@@ -111,6 +112,11 @@ def parse_args():
         "-v",
         action="store_true",
         help="Validate execution (won't place real orders)",
+    )
+    parser.add_argument(
+        "--skip_confirm",
+        action="store_true",
+        help="Skip trade confirmation before executing",
     )
     return parser.parse_args()
 
@@ -291,6 +297,7 @@ def execute_trades(
     rebalancing_buffer: float,
     execution_strategy: str,
     validate: bool,
+    skip_confirm: bool,
 ):
     df_trades, tickers, last_time_updated_trades = None, None, None
 
@@ -312,17 +319,18 @@ def execute_trades(
     # Display trades to be executed and ask for user confirmation
     update_trades()
     display_trades(df_trades)
-    while True:
-        proceed = input("Proceed with trades? [y/n]:")
-        if proceed.lower() not in ["y", "n"]:
-            print("Input must be one of ['Y', 'y', 'N', 'n']")
-            continue
-        elif proceed.lower() == "n":
-            print("Aborting trade execution!")
-            return
-        else:
-            print()
-            break
+    if not skip_confirm:
+        while True:
+            proceed = input("Proceed with trades? [y/n]:")
+            if proceed.lower() not in ["y", "n"]:
+                print("Input must be one of ['Y', 'y', 'N', 'n']")
+                continue
+            elif proceed.lower() == "n":
+                print("Aborting trade execution!")
+                return
+            else:
+                print()
+                break
 
     reupdate_trades = False
     tickers_traded = []
@@ -578,6 +586,7 @@ def main(args):
             rebalancing_buffer=rebalancing_buffer,
             execution_strategy=args.execution_strategy,
             validate=args.validate,
+            skip_confirm=args.skip_confirm,
         )
         # Display current balances after executing trades
         balance = fetch_balance(kraken)
@@ -611,6 +620,12 @@ if __name__ == "__main__":
     )
     setup_logging(config_path=log_config_path)
     logger = logging.getLogger(__name__)
+    # Google Cloud Logging
+    if os.environ.get("USE_STACKDRIVER") == "true":
+        import google.cloud.logging
+
+        client = google.cloud.logging.Client()
+        client.setup_logging(log_level=logging.INFO)
 
     args = parse_args()
     exit(main(args))

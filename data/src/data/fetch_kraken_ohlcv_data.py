@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -201,6 +202,12 @@ if __name__ == "__main__":
     )
     setup_logging(config_path=log_config_path)
     logger = logging.getLogger(__name__)
+    # Google Cloud Logging
+    if os.environ.get("USE_STACKDRIVER") == "true":
+        import google.cloud.logging
+
+        client = google.cloud.logging.Client()
+        client.setup_logging(log_level=logging.INFO)
 
     args = parse_args()
     exit(main(args))
