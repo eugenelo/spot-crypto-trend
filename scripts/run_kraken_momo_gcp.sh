@@ -48,7 +48,7 @@ sudo docker run --rm \
     -v $HOME/logs:/tmp/logs \
     -e USE_STACKDRIVER='true' \
     -w $HOME \
-    genelo33/elo-private:live-trades execute --input_path $HOME/data/kraken_ohlc_from_api/kraken_ohlc_hourly_up2date.csv --input_data_freq 1h --output_data_freq 1d --credentials_path $HOME/kraken_api_key.yaml -p $HOME/params/optimize_rohrbach.yaml --execution_strategy limit --timezone latest --skip_confirm
+    genelo33/elo-private:live-trades execute --input_path $HOME/data/kraken_ohlc_from_api/kraken_ohlc_hourly_up2date.csv --input_data_freq 1h --output_data_freq 1d --credentials_path $HOME/kraken_api_key.yaml -p $HOME/params/optimize_rohrbach.yaml --execution_strategy limit-then-market --timezone latest --skip_confirm
 execute_trades_status=$?
 if [ $execute_trades_status -ne 0 ]
 then

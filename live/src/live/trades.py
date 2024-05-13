@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pytz
 import yaml
-from ccxt.base.types import Order
+from ccxt.base.types import Order, OrderType
 
 from core.constants import (
     AVG_DOLLAR_VOLUME_COL,
@@ -29,6 +29,7 @@ from live.constants import (
     CURRENT_DOLLAR_POSITION_COL,
     CURRENT_POSITION_COL,
     CURRENT_PRICE_COL,
+    LIMIT_THEN_MARKET_SWITCH_TIME,
     POSITION_DELTA_COL,
     TARGET_DOLLAR_POSITION_COL,
     TRADE_AMOUNT_COL,
@@ -102,7 +103,7 @@ def parse_args():
     parser.add_argument(
         "--execution_strategy",
         "-e",
-        choices=["market", "limit"],
+        choices=["market", "limit", "limit-then-market"],
         type=str,
         help="Execution strategy",
         default="limit",
@@ -186,7 +187,7 @@ def get_trades(
 def place_orders(
     kraken: ccxt.kraken,
     df_trades: pd.DataFrame,
-    execution_strategy: str,
+    order_type: OrderType,
     validate: bool,
 ) -> List[Order]:
     if df_trades.empty:
@@ -200,20 +201,22 @@ def place_orders(
         amount = getattr(row, TRADE_AMOUNT_COL)
 
         try:
-            if execution_strategy == "market":
+            if order_type == "market":
                 order = place_market_order(
                     exchange=kraken,
                     ticker=ticker,
                     amount=amount,
                     validate=validate,
                 )
-            else:
+            elif order_type == "limit":
                 order = place_limit_order(
                     exchange=kraken,
                     ticker=ticker,
                     amount=amount,
                     validate=validate,
                 )
+            else:
+                raise ValueError(f"Invalid order type: {order_type}")
             if order is not None:
                 orders_placed.append(order)
         except Exception as e:
@@ -335,8 +338,22 @@ def execute_trades(
     reupdate_trades = False
     tickers_traded = []
     open_order_ids = []
+    start_utc = datetime.now(tz=pytz.UTC)
+    switch_limit_to_market = False
     while True:
         try:
+            if execution_strategy == "limit-then-market" and not switch_limit_to_market:
+                if datetime.now(tz=pytz.UTC) - start_utc > timedelta(
+                    seconds=LIMIT_THEN_MARKET_SWITCH_TIME
+                ):
+                    # Cancel all open limit orders and place market orders
+                    logger.info(
+                        "Switching limit to market! Canceling open limit orders and"
+                        " replacing with market orders"
+                    )
+                    cancel_all_orders(kraken)
+                    switch_limit_to_market = True
+
             # Fetch open orders before updating trades to avoid data race
             # because updating trades takes a very long time
             open_orders = kraken.fetch_open_orders()
@@ -385,11 +402,17 @@ def execute_trades(
             if not df_trades_subset.empty:
                 logger.info("Remaining:")
                 display_trades(df_trades_subset)
-                logger.info("Executing orders")
+                logger.info(
+                    f"Executing orders, execution_strategy={execution_strategy}"
+                )
+                if execution_strategy in ["market", "limit"]:
+                    order_type = execution_strategy
+                elif execution_strategy == "limit-then-market":
+                    order_type = "limit" if not switch_limit_to_market else "market"
                 new_orders = place_orders(
                     kraken=kraken,
                     df_trades=df_trades_subset,
-                    execution_strategy=execution_strategy,
+                    order_type=order_type,
                     validate=validate,
                 )
                 logger.info(f"{len(new_orders)} orders placed, pausing")
