@@ -75,8 +75,11 @@ def in_universe_excl_stablecoins(pair: str) -> bool:
         "GBP",
         "AUD",
     ]
+    TEMPORARY_TICKERS = ["LSK"]  # Temporarily delisted from Kraken
 
-    tickers_outside_universe = GEOLOCKED_TICKERS + WRAPPED_TOKENS + STABLECOIN_TICKERS
+    tickers_outside_universe = (
+        GEOLOCKED_TICKERS + WRAPPED_TOKENS + STABLECOIN_TICKERS + TEMPORARY_TICKERS
+    )
     if any([pair.startswith(ticker) for ticker in tickers_outside_universe]):
         return False
     return True

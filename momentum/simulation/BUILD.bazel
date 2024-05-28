@@ -5,6 +5,7 @@ py_library(
     name = "simulation",
     srcs = glob(["src/simulation/*.py"]),
     deps = [
+        requirement("seaborn"),
         ":vbt",
         "//momentum/position_generation:position_generation",
         "//momentum/core:core",
@@ -19,7 +20,7 @@ py_library(
     srcs = glob(["src/simulation/vbt/*.py"]),
     imports = ["src"],
     deps = [
-        ":simulation_vbtpro",
+        ":simulation_vbtdev",
     ],
     visibility = ["//visibility:public"]
 )

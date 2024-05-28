@@ -1,6 +1,6 @@
-import vectorbtpro as vbt
+import vectorbt as vbt
 
-from simulation.vbt.vbtpro.api import (
+from simulation.vbt.vbtdev.api import (
     ENTRY_TIMESTAMP_COL,
     EXIT_TIMESTAMP_COL,
     get_annualized_return,
@@ -14,4 +14,4 @@ from simulation.vbt.vbtpro.api import (
     get_returns,
     get_value,
 )
-from simulation.vbt.vbtpro.simulate import simulate
+from simulation.vbt.vbtdev.simulate import simulate

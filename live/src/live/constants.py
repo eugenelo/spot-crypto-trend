@@ -75,3 +75,5 @@ UPDATE_TRADES_INTERVAL = 0  # [seconds]
 
 # Pnl
 PNL_DATA_FETCH_START_DATE = datetime(2024, 1, 1, tzinfo=pytz.UTC)
+
+NUM_RETRY_ATTEMPTS = 10

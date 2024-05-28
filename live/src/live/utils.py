@@ -18,19 +18,27 @@ from live.constants import (
     HISTORICAL_TRADE_COLUMNS,
     ID_COL,
     LEDGER_COLUMNS,
+    NUM_RETRY_ATTEMPTS,
 )
 
 
 def portfolio_value(positions: Dict[str, float], df_prices: pd.DataFrame) -> float:
     value = 0.0
     for ticker, amount in positions.items():
+        if ticker == "LSKUSD":
+            # Kraken delisted LSK, so symbol conversion doesn't work. Headache
+            ticker = "LSK/USD"
         if ticker == BASE_CURRENCY:
             value += amount
         else:
             # Translate ticker to base currency with day's close price
             close = df_prices.loc[df_prices[TICKER_COL] == ticker, CLOSE_COL]
-            assert close.size == 1, f"{ticker}, {df_prices}"
-            close = close.iloc[0]
+            if ticker == "LSK/USD" and close.size < 1:
+                # Kraken delisted LSK, treat as $0 once delisted.
+                close = 0
+            else:
+                assert close.size == 1, f"{ticker}, {df_prices}"
+                close = close.iloc[0]
             value += amount * close
     return value
 
@@ -59,12 +67,30 @@ def fetch_balance(exchange: ccxt.Exchange) -> Dict[str, BalanceEntry]:
     bal_to_ignore = {"BTC": 0.11440919 - 0.00065952, BASE_CURRENCY: 12000}
 
     # Fetch account balance
-    balance = exchange.fetch_balance()["total"]
+    balance = None
+    for _attempt in range(NUM_RETRY_ATTEMPTS):
+        try:
+            balance = exchange.fetch_balance()["total"]
+        except (ccxt.NetworkError, ccxt.ExchangeNotAvailable) as e:
+            logger.warning(
+                f"Fetching balance failed due to a network error: {str(e)}. Retrying!"
+            )
+            continue
+        else:
+            break
+    if balance is None:
+        raise RuntimeError("Failed to fetch balance")
 
     # Mark assets to market
     out: Dict[str, BalanceEntry] = {}
     for asset, amount in balance.items():
-        if asset != BASE_CURRENCY:
+        if asset == "LSK":
+            # 2024/05/25: Kraken delisted LSK from trading pending its migration to LSK2.
+            # Attempting to fetch the mid price will throw an exception.
+            # For now, just ignore the amount on balance.
+            ticker = f"{asset}/{BASE_CURRENCY}"
+            market_price = 0
+        elif asset != BASE_CURRENCY:
             # Fetch current market price of the asset
             ticker = f"{asset}/{BASE_CURRENCY}"
             market_price = fetch_bid_ask_spread(exchange=exchange, ticker=ticker).mid
@@ -222,7 +248,19 @@ def fetch_order_book(exchange: ccxt.Exchange, ticker: str) -> OrderBook:
     Returns:
         OrderBook: Order book for ticker
     """
+    order_book = None
     limit = 500
-    order_book = exchange.fetch_order_book(symbol=ticker, limit=limit)
+    for _attempt in range(NUM_RETRY_ATTEMPTS):
+        try:
+            order_book = exchange.fetch_order_book(symbol=ticker, limit=limit)
+        except (ccxt.NetworkError, ccxt.ExchangeNotAvailable) as e:
+            logger.warning(
+                f"{ticker} failed due to a network error: {str(e)}. Retrying!"
+            )
+            continue
+        else:
+            break
+    if order_book is None:
+        raise RuntimeError(f"Failed to fetch order book for {ticker}")
     assert order_book["symbol"] == ticker
     return order_book

@@ -110,7 +110,9 @@ def update_positions_with_trade(positions: Dict[str, float], trade: NamedTuple) 
     positions[BASE_CURRENCY] -= cost
     # Account for costs
     for fee_dict in fees:
-        assert fee_dict[CURRENCY_COL] == BASE_CURRENCY
+        assert (
+            fee_dict[CURRENCY_COL] == BASE_CURRENCY or fee_dict[CURRENCY_COL] is None
+        ), fee_dict[CURRENCY_COL]
         positions[BASE_CURRENCY] -= fee_dict[COST_COL]
 
 
