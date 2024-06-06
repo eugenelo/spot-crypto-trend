@@ -14,7 +14,7 @@ py_library(
     visibility = ["//visibility:public"]
 )
 
-# Use vbtpro
+# Use vbtdev
 py_library(
     name="vbt",
     srcs = glob(["src/simulation/vbt/*.py"]),
@@ -25,6 +25,7 @@ py_library(
     visibility = ["//visibility:public"]
 )
 
+# Free vectorbt library hookups
 py_library(
     name="simulation_vbtdev",
     srcs = glob(["src/simulation/vbt/vbtdev/*.py"]),
@@ -36,16 +37,17 @@ py_library(
     visibility = ["//visibility:private"]
 )
 
-py_library(
-    name="simulation_vbtpro",
-    srcs = glob(["src/simulation/vbt/vbtpro/*.py"]),
-    imports = ["src"],
-    deps = [
-        requirement("vectorbtpro"),
-        "//momentum/core:core_nb",
-    ],
-    visibility = ["//visibility:private"]
-)
+# Paid vectorbtpro library hookups
+# py_library(
+#     name="simulation_vbtpro",
+#     srcs = glob(["src/simulation/vbt/vbtpro/*.py"]),
+#     imports = ["src"],
+#     deps = [
+#         requirement("vectorbtpro"),
+#         "//momentum/core:core_nb",
+#     ],
+#     visibility = ["//visibility:private"]
+# )
 
 py_test(
     name="test_simulate",
