@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict
@@ -20,6 +21,8 @@ from live.constants import (
     LEDGER_COLUMNS,
     NUM_RETRY_ATTEMPTS,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def portfolio_value(positions: Dict[str, float], df_prices: pd.DataFrame) -> float:
@@ -85,8 +88,8 @@ def fetch_balance(exchange: ccxt.Exchange) -> Dict[str, BalanceEntry]:
     out: Dict[str, BalanceEntry] = {}
     for asset, amount in balance.items():
         if asset == "LSK":
-            # 2024/05/25: Kraken delisted LSK from trading pending its migration to LSK2.
-            # Attempting to fetch the mid price will throw an exception.
+            # 2024/05/25: Kraken delisted LSK from trading pending its migration
+            # to LSK2. Attempting to fetch the mid price will throw an exception.
             # For now, just ignore the amount on balance.
             ticker = f"{asset}/{BASE_CURRENCY}"
             market_price = 0
