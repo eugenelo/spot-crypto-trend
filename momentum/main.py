@@ -43,9 +43,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Crypto Cross-Sectional Momentum + Trend Following"
     )
-    parser.add_argument(
-        "mode", help="[analysis, simulation, backtest, optimize, positions]"
-    )
+    parser.add_argument("mode", help="[analysis, backtest, optimize, positions]")
     parser.add_argument(
         "--input_path", "-i", type=str, required=True, help="Input file path"
     )
@@ -122,7 +120,7 @@ if __name__ == "__main__":
     )
 
     # Create signals
-    if args.mode == "analysis" or args.mode == "simulation":
+    if args.mode == "analysis":
         df_analysis = create_analysis_signals(df_ohlc, periods_per_day=periods_per_day)
     else:
         df_analysis = create_trading_signals(

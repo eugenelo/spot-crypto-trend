@@ -27,7 +27,7 @@ def create_rohrbach_signals(
         short, long = pair[0], pair[1]
         df_signals[f"x_{k}"] = df_signals[f"{short}d_ema"] - df_signals[f"{long}d_ema"]
 
-    # Calculate realized 3-month normal volatility on prices
+    # Calculate realized 3-month volatility on prices
     lookback_days = 91
     periods = lookback_days * periods_per_day
     df_signals[f"price_{lookback_days}d_vol"] = volatility_ema(

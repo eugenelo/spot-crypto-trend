@@ -454,7 +454,7 @@ def main(args):
             or args.input_path
             or args.output_path
         )
-    ), "'--auto' can only be used with '--input_dir' and '--output_dir' (optional)"
+    ), "'--auto' can only be used with '--input_dir' and '--output_dir'"
 
     if args.auto:
         # Automatic update

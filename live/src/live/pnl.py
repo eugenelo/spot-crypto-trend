@@ -60,39 +60,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_current_pnl(
-    kraken: ccxt.kraken, start_date: datetime, df_ohlc: pd.DataFrame, verbose: bool
-) -> float:
-    # Compute starting bankroll from account size on start date
-    account_size = get_historical_account_size(
-        kraken,
-        start_date=start_date,
-        df_ohlc=df_ohlc,
-    )
-    logger.info(f"Account Size: {account_size}")
-    starting_bankroll = account_size.iloc[0]
-    assert np.isfinite(starting_bankroll) and starting_bankroll > 0.0
-    # Compute PNL
-    balance = fetch_balance(kraken)
-    if verbose:
-        for ticker, balance_entry in balance.items():
-            amount = balance_entry.amount
-            market_price = balance_entry.mid_price
-            cash_value = balance_entry.base_currency
-            logger.info(
-                f"Ticker: {ticker}, Amount: {amount:.4f}, Market Price:"
-                f" ${market_price:.2f}, Cash Value: ${cash_value:.2f}"
-            )
-
-    curr_cash_value = get_account_size(balance)
-    pnl = (curr_cash_value - starting_bankroll) / starting_bankroll
-    if verbose:
-        logger.info(f"Current Cash Value: ${(curr_cash_value):.2f}")
-        logger.info(f"Starting Bankroll: ${starting_bankroll:.2f}")
-        logger.info(f"PNL: {(pnl * 100):.2f}%")
-    return pnl
-
-
 def update_positions_with_trade(positions: Dict[str, float], trade: NamedTuple) -> None:
     # Increment/Decrement target asset
     ticker = getattr(trade, TICKER_COL)
@@ -155,17 +122,9 @@ def get_historical_account_size(
     kraken: ccxt.kraken,
     start_date: datetime,
     df_ohlc: pd.DataFrame,
+    df_trades: pd.DataFrame,
+    df_deposits: pd.DataFrame,
 ) -> pd.Series:
-    # Fetch all historical trades
-    df_trades = get_historical_trades(
-        kraken=kraken, start_date=PNL_DATA_FETCH_START_DATE
-    )
-
-    # Get historical deposits
-    df_deposits = get_historical_deposits(
-        kraken=kraken, start_date=PNL_DATA_FETCH_START_DATE
-    )
-
     # Set start date to first deposit date at the earliest
     min_deposit_date = df_deposits[DATETIME_COL].min()
 
@@ -220,12 +179,11 @@ def get_historical_account_size(
 
 
 def get_historical_pnl(
-    kraken: ccxt.kraken, start_date: datetime, account_size: pd.Series
+    kraken: ccxt.kraken,
+    start_date: datetime,
+    account_size: pd.Series,
+    df_deposits: pd.DataFrame,
 ) -> pd.Series:
-    # Get historical deposits
-    df_deposits = get_historical_deposits(
-        kraken=kraken, start_date=PNL_DATA_FETCH_START_DATE
-    )
     base_currency_deposits = df_deposits.loc[df_deposits[CURRENCY_COL] == BASE_CURRENCY]
 
     # When computing log returns, account for deposits which occurred on that day
@@ -274,23 +232,37 @@ def main(args):
         whitelist_fn=None,
     )
 
-    if args.skip_plots:
-        get_current_pnl(kraken, start_date=start_date, df_ohlc=df_ohlc, verbose=True)
-    else:
-        # Plot account size over time
-        account_size = get_historical_account_size(
-            kraken,
-            start_date=start_date,
-            df_ohlc=df_ohlc,
-        )
+    # Fetch all historical trades
+    df_trades = get_historical_trades(
+        kraken=kraken, start_date=PNL_DATA_FETCH_START_DATE
+    )
+
+    # Fetch historical deposits
+    df_deposits = get_historical_deposits(
+        kraken=kraken, start_date=PNL_DATA_FETCH_START_DATE
+    )
+
+    # Get account size over time
+    account_size = get_historical_account_size(
+        kraken,
+        start_date=start_date,
+        df_ohlc=df_ohlc,
+        df_trades=df_trades,
+        df_deposits=df_deposits,
+    )
+    if not args.skip_plots:
         fig = px.line(account_size, title="Account Size")
         fig.update_layout(showlegend=False)
         fig.show()
 
-        # Convert account sizes to log returns
-        pnl = get_historical_pnl(
-            kraken, start_date=start_date, account_size=account_size
-        )
+    # Convert account sizes to log returns
+    pnl = get_historical_pnl(
+        kraken,
+        start_date=start_date,
+        account_size=account_size,
+        df_deposits=df_deposits,
+    )
+    if not args.skip_plots:
         fig = px.bar(pnl, title="Log Returns")
         fig.update_layout(showlegend=False)
         fig.show()
@@ -298,14 +270,19 @@ def main(args):
         fig = px.line(pnl.cumsum(), title="Cumulative Log Returns")
         fig.update_layout(showlegend=False)
         fig.show()
-        # Print realized volatility
-        realized_volatility = np.sqrt(np.sum(pnl**2))
-        logger.info(f"Daily Realized Volatility: {100 * realized_volatility:.2f}%")
-        anualizing_factor = np.sqrt(365 / pnl.size)
-        logger.info(
-            "Annualized Volatility:"
-            f" {anualizing_factor * 100 * realized_volatility:.2f}%"
-        )
+
+    # Print PnL
+    logger.info(f"Account Size:\n{account_size}")
+    logger.info(f"Current Account Size: ${(account_size.iloc[-1]):.2f}")
+    logger.info(f"PnL: {(pnl.cumsum().iloc[-1] * 100):.2f}%")
+
+    # Print realized volatility
+    realized_volatility = np.sqrt(np.sum(pnl**2))
+    logger.info(f"Daily Realized Volatility: {100 * realized_volatility:.2f}%")
+    anualizing_factor = np.sqrt(365 / pnl.size)
+    logger.info(
+        f"Annualized Volatility: {anualizing_factor * 100 * realized_volatility:.2f}%"
+    )
 
     return 0
 
