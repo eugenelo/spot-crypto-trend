@@ -172,18 +172,18 @@ platform_transition_filegroup(
     }),
 )
 #  $ bazel run //data:tarball
-#  $ docker run --rm genelo33/elo-private:fetch-ohlcv
+#  $ docker run --rm eugenelo/spot-crypto-trend:fetch-ohlcv
 oci_tarball(
     name = "tarball",
     format = "docker",
     image = ":platform_image",
-    repo_tags = ["genelo33/elo-private:fetch-ohlcv"],
+    repo_tags = ["eugenelo/spot-crypto-trend:fetch-ohlcv"],
 )
 
 #  $ bazel run //data:publish
 oci_push(
     name = "publish",
     image = ":platform_image",
-    repository = "genelo33/elo-private",
+    repository = "eugenelo/spot-crypto-trend",
     remote_tags = ["fetch-ohlcv"],
 )

@@ -30,8 +30,8 @@ systemctl start kraken_momo_gcp_shutdown.service
 
 
 # Pull latest docker images
-sudo docker pull genelo33/elo-private:fetch-ohlcv
-sudo docker pull genelo33/elo-private:live-trades
+sudo docker pull eugenelo/spot-crypto-trend:fetch-ohlcv
+sudo docker pull eugenelo/spot-crypto-trend:live-trades
 
 
 # Run kraken momo workflow

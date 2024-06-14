@@ -10,7 +10,7 @@ sudo docker run --rm \
     -v $HOME/logs:/tmp/logs \
     -e USE_STACKDRIVER='true' \
     -w $HOME \
-    genelo33/elo-private:live-trades cancel_all --input_path $HOME/data/kraken_ohlc_from_api/kraken_ohlc_hourly_up2date.csv --input_data_freq 1h --output_data_freq 1d --credentials_path $HOME/kraken_api_key.yaml -p $HOME/params/optimize_rohrbach.yaml
+    eugenelo/spot-crypto-trend:live-trades cancel_all --input_path $HOME/data/kraken_ohlc_from_api/kraken_ohlc_hourly_up2date.csv --input_data_freq 1h --output_data_freq 1d --credentials_path $HOME/kraken_api_key.yaml -p $HOME/params/optimize_rohrbach.yaml
 cancel_all_status=$?
 if [ $cancel_all_status -ne 0 ];
 then

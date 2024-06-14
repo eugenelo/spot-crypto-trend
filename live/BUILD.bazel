@@ -115,18 +115,18 @@ platform_transition_filegroup(
     }),
 )
 #  $ bazel run //live:tarball
-#  $ docker run --rm genelo33/elo-private:live-trades
+#  $ docker run --rm eugenelo/spot-crypto-trend:live-trades
 oci_tarball(
     name = "tarball",
     format = "docker",
     image = ":platform_image",
-    repo_tags = ["genelo33/elo-private:live-trades"],
+    repo_tags = ["eugenelo/spot-crypto-trend:live-trades"],
 )
 
 #  $ bazel run //live:publish
 oci_push(
     name = "publish",
     image = ":platform_image",
-    repository = "genelo33/elo-private",
+    repository = "eugenelo/spot-crypto-trend",
     remote_tags = ["live-trades"],
 )

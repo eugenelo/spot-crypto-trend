@@ -18,18 +18,17 @@ sudo apt-get update
 # Install Docker packages
 yes | sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-
 # Start Docker
 sudo service docker start
-
 
 # Pull docker images
 sudo docker pull ${docker_repo}:fetch-ohlcv
 sudo docker pull ${docker_repo}:live-trades
 
-
 # Transfer local files
 mkdir -p ~/data/kraken_ohlc_from_api/
 mkdir ~/params/
 mkdir ~/scripts/
-# ex. gcloud compute scp ~/data/kraken_ohlc_from_api/kraken_ohlc_hourly_up2date.csv ${instance-id}:~/data/kraken_ohlc_from_api/kraken_ohlc_hourly_up2date.csv
+# gcloud compute scp ${ohlcv_data_path} ${instance-id}:~/data/kraken_ohlc_from_api/kraken_ohlc_hourly_up2date.csv
+# gcloud compute scp ${kraken_api_key_path} ${instance-id}:${kraken_api_key_path}
+# gcloud compute scp momentum/params/optimize_rohrbach.yaml ${instance-id}:~/params/optimize_rohrbach.yaml
