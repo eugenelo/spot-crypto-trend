@@ -2,6 +2,9 @@ from enum import Enum
 
 import pandas as pd
 
+FIXED_FEE = 0
+SLIPPAGE = 0.005  # 0.5%
+
 
 def kraken_maker_fees(rolling_30d_volume: float):
     # Define your fee structure based on rolling_30d_volume

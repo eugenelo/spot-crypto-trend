@@ -284,6 +284,7 @@ def main(args):
             df_ohlc=df_ohlc,
         )
         fig = px.line(account_size, title="Account Size")
+        fig.update_layout(showlegend=False)
         fig.show()
 
         # Convert account sizes to log returns
@@ -291,13 +292,20 @@ def main(args):
             kraken, start_date=start_date, account_size=account_size
         )
         fig = px.bar(pnl, title="Log Returns")
+        fig.update_layout(showlegend=False)
         fig.show()
         # Plot cumulative log returns
         fig = px.line(pnl.cumsum(), title="Cumulative Log Returns")
+        fig.update_layout(showlegend=False)
         fig.show()
         # Print realized volatility
         realized_volatility = np.sqrt(np.sum(pnl**2))
-        logger.info(f"Realized Volatility: {100 * realized_volatility:.2f}%")
+        logger.info(f"Daily Realized Volatility: {100 * realized_volatility:.2f}%")
+        anualizing_factor = np.sqrt(365 / pnl.size)
+        logger.info(
+            "Annualized Volatility:"
+            f" {anualizing_factor * 100 * realized_volatility:.2f}%"
+        )
 
     return 0
 

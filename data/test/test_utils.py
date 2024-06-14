@@ -28,6 +28,12 @@ class TestDataUtils(unittest.TestCase):
         s_expected = [1, 2, 3, 4, 5, 6, 7, 8, 9]
         self.assertEqual(s_expected, interpolate_missing_ids(s_both).to_list())
 
+        s_ffill_over_bfill = pd.Series([1, 2, np.nan, np.nan, 9])
+        s_expected = [1, 2, 3, 4, 9]
+        self.assertEqual(
+            s_expected, interpolate_missing_ids(s_ffill_over_bfill).to_list()
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

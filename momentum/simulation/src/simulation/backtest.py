@@ -15,7 +15,7 @@ from position_generation.constants import (
     NUM_UNIQUE_ASSETS_COL,
 )
 from simulation.constants import DEFAULT_REBALANCING_BUFFER, DEFAULT_VOLUME_MAX_SIZE
-from simulation.fees import FeeType, compute_fees
+from simulation.fees import FIXED_FEE, SLIPPAGE, FeeType, compute_fees
 from simulation.stats import (
     aggregate_stats,
     get_trade_volume,
@@ -42,12 +42,23 @@ def backtest(
     rebalancing_buffer: float = DEFAULT_REBALANCING_BUFFER,
     verbose: bool = False,
 ) -> vbt.Portfolio:
-    """
-    Backtest a pf_strategy
+    """Backtest a portfolio.
 
     Args:
-        df_backtest (pd.DataFrame): Should contain timestamp, close, position columns. Assuming 0 slippage, entire order can be filled.
-        initial_capital (float): Initial capital in USD.
+        df_backtest (pd.DataFrame): DataFrame containing timestamp, close, & position columns.
+        periods_per_day (int): Frequency of df_backtest.
+        initial_capital (float): Initial capital in base currency (USD).
+        leverage (float, optional): Allowable leverage for filling orders. Defaults to 1.0.
+        rebalancing_freq (Optional[str], optional): Rebalancing frequency. DataFrame will be resampled if specified. Defaults to None.
+        start_date (Optional[str], optional): Date at which to start backtest, or None to use the entire DataFrame. Defaults to None.
+        end_date (Optional[str], optional): Date at which to end backtest, or None to use the entire DataFrame. Defaults to None.
+        with_fees (bool, optional): Whether to run backtest with dynamic fees. Defaults to True.
+        volume_max_size (float, optional): Max % of traded volume allowed for filling orders. Defaults to DEFAULT_VOLUME_MAX_SIZE.
+        rebalancing_buffer (float, optional): Rebalancing buffer width as % of overall portfolio. Defaults to DEFAULT_REBALANCING_BUFFER.
+        verbose (bool, optional): Produce additional plots and stats. Defaults to False.
+
+    Returns:
+        vbt.Portfolio: The backtested portfolio
     """  # noqa: B950
     # Copy dataframe to avoid corrupting original contents
     df_backtest = df_backtest.copy()
@@ -87,7 +98,7 @@ def backtest(
     )
     # Save original price index for computing daily volume later
     orig_price_index = price.index.copy()
-    # Create positions for daily rebalancing
+    # Create positions for periodic rebalancing
     positions = df_backtest[[DATETIME_COL, TICKER_COL, POSITION_COL]]
     positions = pd.pivot_table(
         positions,
@@ -114,8 +125,8 @@ def backtest(
         segment_mask=segment_mask,
         direction=vbt.portfolio.enums.Direction.Both,
         fees=0,
-        fixed_fees=0,
-        slippage=0.005,
+        fixed_fees=FIXED_FEE,
+        slippage=SLIPPAGE,
         leverage=leverage,
     )
     # fmt: on
@@ -132,7 +143,6 @@ def backtest(
     trade_volume_per_period = trade_volume_per_period.reindex(
         orig_price_index, fill_value=0
     )
-
     rolling_30d_trade_volume = trade_volume_per_period.rolling(
         window=30 * periods_per_day, min_periods=1
     ).sum()
@@ -176,8 +186,8 @@ def backtest(
         segment_mask=segment_mask,
         direction=vbt.portfolio.enums.Direction.Both,
         fees=dynamic_fees,
-        fixed_fees=0,
-        slippage=0.005,
+        fixed_fees=FIXED_FEE,
+        slippage=SLIPPAGE,
         leverage=leverage,
     )
 
@@ -251,7 +261,7 @@ def backtest(
                 NUM_OPEN_SHORT_POSITIONS_COL,
                 NUM_OPEN_POSITIONS_COL,
             ],
-            title="Num Open Positions",
+            title="Asset Universe",
         )
         fig.show()
 
@@ -272,21 +282,25 @@ def backtest_crypto(
     rebalancing_buffer: float = DEFAULT_REBALANCING_BUFFER,
     skip_plots: bool = False,
 ) -> List[vbt.Portfolio]:
-    """
-    Convenience wrapper for backtesting on crypto dataset
+    """Convenience wrapper for backtesting on crypto dataset
 
     Args:
-        df_analysis (pd.DataFrame): _description_
-        generate_positions_fn (Callable): Generates positions for df_analysis. Signature `(pd.DataFrame, dict) -> pd.DataFrame`.
-        generate_benchmark_fn (Callable): Generates benchmark positions for df_analysis. Signature `(pd.DataFrame, dict) -> pd.DataFrame`.
-        start_date (str): _description_
-        end_date (str): _description_
-        initial_capital (float): _description_
-        skip_plots (bool, optional): _description_. Defaults to False.
+        df_analysis (pd.DataFrame): DataFrame containing trend signals.
+        generate_positions_fn (Callable): Portfolio position generation function.
+        generate_benchmark_fn (Callable): Benchmark position generation function.
+        periods_per_day (int): Frequency of df_analysis.
+        start_date (str): Date at which to start backtest. Expected to be within bounds of df_analysis.
+        end_date (str): Date at which to end backtest. Expected to be within bounds of df_analysis.
+        initial_capital (float): Initial capital in base currency (USD).
+        leverage (float, optional): Allowable leverage for filling orders. Defaults to 1.0.
+        rebalancing_freq (Optional[str], optional): Rebalancing frequency. DataFrame will be resampled if specified. Defaults to None.
+        volume_max_size (float, optional): Max % of traded volume allowed for filling orders. Defaults to DEFAULT_VOLUME_MAX_SIZE.
+        rebalancing_buffer (float, optional): Rebalancing buffer width as % of overall portfolio. Defaults to DEFAULT_REBALANCING_BUFFER.
+        verbose (bool, optional): Produce additional plots and stats. Defaults to False.
 
     Returns:
-        List[vbt.Portfolio]: _description_
-    """  # noqa: B950
+        List[vbt.Portfolio]: List of [backtested_benchmark, backtested_portfolio]
+    """  # noqa:B950
     # Backtest benchmark
     df_benchmark = generate_benchmark_fn(df_analysis)
     pf_benchmark = backtest(

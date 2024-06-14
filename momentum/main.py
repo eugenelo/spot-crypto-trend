@@ -30,7 +30,11 @@ from signal_generation.signal_generation import (
     create_trading_signals,
 )
 from simulation.backtest import backtest_crypto
-from simulation.constants import DEFAULT_REBALANCING_BUFFER, DEFAULT_VOLUME_MAX_SIZE
+from simulation.constants import (
+    DEFAULT_REBALANCING_BUFFER,
+    DEFAULT_REBALANCING_FREQ,
+    DEFAULT_VOLUME_MAX_SIZE,
+)
 from simulation.optimize import optimize
 from simulation.utils import rebal_freq_supported
 
@@ -61,9 +65,6 @@ def parse_args():
     )
     parser.add_argument("--timezone", "-t", type=str, help="Timezone", default="UTC")
     parser.add_argument("--params_path", "-p", type=str, help="Params yaml file path")
-    parser.add_argument(
-        "--rebalancing_freq", "-r", type=str, help="Rebalancing frequency"
-    )
     parser.add_argument(
         "--initial_capital", "-c", type=float, help="Initial capital", default=12000
     )
@@ -143,28 +144,16 @@ if __name__ == "__main__":
         end_date = data_end
 
     # Set input args
-    rebalancing_freq = args.rebalancing_freq
-    if "rebalancing_freq" in params:
-        if rebalancing_freq is None:
-            rebalancing_freq = params["rebalancing_freq"]
-        elif params["rebalancing_freq"] != rebalancing_freq:
-            logger.warning(
-                f"Rebalancing freq conflict! Params={params['rebalancing_freq']},"
-                f" Input={rebalancing_freq}. Using input {rebalancing_freq}."
-            )
+    rebalancing_freq = params.get("rebalancing_freq", DEFAULT_REBALANCING_FREQ)
     if rebalancing_freq is not None:
         assert rebal_freq_supported(rebalancing_freq), (
             f"Rebalancing frequency {rebalancing_freq} is not supported! Use a fixed"
             " frequency instead (e.g. days)."
         )
+    volume_max_size = params.get("volume_max_size", DEFAULT_VOLUME_MAX_SIZE)
+    rebalancing_buffer = params.get("rebalancing_buffer", DEFAULT_REBALANCING_BUFFER)
     logger.info(f"Rebalancing Freq: {rebalancing_freq}")
-    volume_max_size = DEFAULT_VOLUME_MAX_SIZE
-    if "volume_max_size" in params:
-        volume_max_size = params["volume_max_size"]
     logger.info(f"volume_max_size: {volume_max_size}")
-    rebalancing_buffer = DEFAULT_REBALANCING_BUFFER
-    if "rebalancing_buffer" in params:
-        rebalancing_buffer = params["rebalancing_buffer"]
     logger.info(f"rebalancing_buffer: {rebalancing_buffer}")
 
     if args.mode == "analysis":

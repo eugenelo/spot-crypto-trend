@@ -48,15 +48,15 @@ def order_func_nb(
     rebalancing_buffer: float,
 ):
     """
-    Execute long-only orders while respecting sizing constraints (% of available
-    volume) and rebalancing buffers.
+    Execute orders while respecting sizing constraints (% of available volume)
+    and rebalancing buffers.
 
     Args:
         c (vbt.portfolio.enums.OrderContext): OrderContext
-        size (_type_): _description_
-        volume (_type_): _description_
-        volume_max_size (float, optional): _description_. Defaults to 0.01.
-        rebalancing_buffer (float, optional): _description_. Defaults to 0.01.
+        size (_type_): Target size as a % of portfolio
+        volume (_type_): Traded volume in units of the asset
+        volume_max_size (float): Max % of traded volume allowed for filling orders
+        rebalancing_buffer (float): Rebalancing buffer width as % of overall portfolio
 
     Returns:
         vbt.portfolio.enums.Order: Order
