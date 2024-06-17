@@ -44,7 +44,7 @@ The [default script](../scripts/run_kraken_momo_gcp.sh) assume the following loc
 
 **SCP these files from your local machine to the instance.**
 
-These steps are contained in the setup scrip [gcp_setup.sh](../scripts/gcp_setup.sh).
+These steps are contained in the setup script [gcp_setup.sh](../scripts/gcp_setup.sh).
 
 
 ## Upload scripts to cloud storage
