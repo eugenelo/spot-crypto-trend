@@ -1,6 +1,6 @@
 # Spot Cryptocurrency Trend-Following System
 
-This is a trend-following system for spot cryptocurrencies. The pipeline includes:
+This is a (long-only)* trend-following system for spot cryptocurrencies. The pipeline includes:
 
 - Fetching of spot tick & OHLCV data from [Kraken](https://www.kraken.com/)
 - Trend signal & position generation
@@ -8,7 +8,7 @@ This is a trend-following system for spot cryptocurrencies. The pipeline include
 - Simulation & Backtesting
 - Live order management & execution on Kraken
 
-Refer to [Introduction](docs/introduction.md) for a more detailed overview.
+\* Refer to [Introduction](docs/introduction.md) for a more detailed overview.
 
 ***DISCLAIMER: This software is designed primarily for educational purposes and is not intended for professional or commercial trading. It does not provide financial, investment, or trading advice. Use of this software is at your own risk, and the developers are not responsible for any financial losses or damages resulting from its use. Ensure compliance with applicable laws and consult with a licensed financial professional before engaging in any trading activities.***
 

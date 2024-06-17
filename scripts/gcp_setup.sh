@@ -22,13 +22,13 @@ yes | sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-p
 sudo service docker start
 
 # Pull docker images
-sudo docker pull ${docker_repo}:fetch-ohlcv
-sudo docker pull ${docker_repo}:live-trades
+sudo docker pull eugenelo/spot-crypto-trend:fetch-ohlcv
+sudo docker pull eugenelo/spot-crypto-trend:live-trades
 
 # Transfer local files
 mkdir -p ~/data/kraken_ohlc_from_api/
 mkdir ~/params/
 mkdir ~/scripts/
 # gcloud compute scp ${ohlcv_data_path} ${instance-id}:~/data/kraken_ohlc_from_api/kraken_ohlc_hourly_up2date.csv
-# gcloud compute scp ${kraken_api_key_path} ${instance-id}:${kraken_api_key_path}
+# gcloud compute scp ${kraken_api_key_path} ${instance-id}:~/kraken_api_key.yaml
 # gcloud compute scp momentum/params/optimize_rohrbach.yaml ${instance-id}:~/params/optimize_rohrbach.yaml

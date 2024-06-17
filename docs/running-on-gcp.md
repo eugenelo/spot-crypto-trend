@@ -8,7 +8,7 @@ The first step is to create a GCP VM instance. For those with no prior experienc
 
 The [Docker images](./building-docker-images.md) which we will be using are built off of the base [`@ubuntu` Docker image](https://hub.docker.com/_/ubuntu), and so we should create an instance which uses the Ubuntu operating system. `Ubuntu 20.04 LTS` is a known working version.
 
-Around 1GB of RAM is required to run the program. We will be loading the ~600MB OHLCV CSV into a dataframe twice (once to update the data, and again to generate positions). Some of the shared-core instances (`e2-small` or `e2-medium`) could technically run this, but loading the dataframe could take an extremely long time (10+ minutes) if preempted. A non-preemptible machine type of `e2-standard-2` or better is recommended.
+Around 1GB of RAM is required to run the program. We will be loading the ~600MB OHLCV CSV into a dataframe twice (once to update the data, and again to generate positions). Some of the shared-core instances (`e2-small` or `e2-medium`) are technically sufficiently capable, but loading the dataframe could take an extremely long time (10+ minutes) if preempted. A non-preemptible machine type of `e2-standard-2` or better is recommended.
 
 A 10GB persistent disk is sufficient for everything we need to upload to the instance (Docker images ~2GB and hourly OHLCV data ~0.6GB), but leaves us with little wiggle room. In our experience, resolving issues with a full persistent disk can be a headache. If the disk is sufficiently full, one can no longer SSH into the instance to clear space. [Resizing a disk](https://cloud.google.com/compute/docs/disks/resize-persistent-disk) can often fail due to insufficient resource availability. We suggest allocating more space to the disk than needed as a safety buffer.
 
@@ -17,12 +17,14 @@ A 10GB persistent disk is sufficient for everything we need to upload to the ins
 
 SSH into the instance after it has been created.
 
-We will need to set up Docker. Follow the [installation instructions for Ubuntu](https://docs.docker.com/engine/install/ubuntu/) and then start the service
+We will need to set up Docker. First, **follow the [installation instructions for Ubuntu](https://docs.docker.com/engine/install/ubuntu/).**
+
+Then, start the service
 ```
 $ sudo service docker start
 ```
 
-Then, pull the images of interest
+Pull the images of interest
 ```
 $ docker pull eugenelo/spot-crypto-trend:fetch-ohlcv
 $ docker pull eugenelo/spot-crypto-trend:live-trades
@@ -40,9 +42,9 @@ The [default script](../scripts/run_kraken_momo_gcp.sh) assume the following loc
 - Kraken API Key: `~/kraken_api_key.yaml`
 - Position Generation Params: `~/params/optimize_rohrbach.yaml`
 
-SCP these files from your local machine to the instance.
+**SCP these files from your local machine to the instance.**
 
-An example script containing the commands to run on the GCP instance to complete setup is available at [gcp_setup.sh](../scripts/gcp_setup.sh).
+These steps are contained in the setup scrip [gcp_setup.sh](../scripts/gcp_setup.sh).
 
 
 ## Upload scripts to cloud storage
