@@ -27,7 +27,13 @@ This is an open source version of my trend-following system for spot assets on t
   - Order Management System
   - Historical PnL Visualization
 
-As I reside in the US and am not an [Eligible Contract Participant (ECP)](https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title7-section1a&num=0&edition=prelim), I am subject to certain trading restrictions and have correspondingly implemented features to comply, including:
+## Limitations
 
-- Inability to trade certain tickers due to geographic restrictions (list located in [core](../momentum/core/src/core/constants.py))
-- Inability to trade on margin and therefore to go short (configurable via the [direction key-value param](../momentum/params/optimize_rohrbach.yaml#L4), see the [Direction Enum](../momentum/position_generation/src/position_generation/utils.py#L10) for valid values)
+As I reside in the US and am not an [Eligible Contract Participant (ECP)](https://uscode.house.gov/view.xhtml?req=granuleid:USC-prelim-title7-section1a&num=0&edition=prelim), I am subject to certain trading restrictions, including:
+
+- Inability to trade certain tickers due to geographic restrictions.
+  - The full list of restrictions is located in [core](../momentum/core/src/core/constants.py).
+  - By default, restricted tickers will be excluded from the investable universe (treated as if they don't exist). Signals and correlations will be computed ignoring restricted tickers.
+- Inability to trade on margin and therefore to go short.
+  - For the purposes of position generation and backtesting, this is configurable via the [direction key-value param](../momentum/params/optimize_rohrbach.yaml#L4) (see the [Direction Enum](../momentum/position_generation/src/position_generation/utils.py#L10) for valid values).
+  - **For live trading, trading on margin is not implemented. Only long-only positions with no leverage are supported.**
